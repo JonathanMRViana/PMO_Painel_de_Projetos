@@ -408,6 +408,13 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
       })),
     [actions],
   );
+  const projectActionCounts = useMemo(
+    () => Object.fromEntries(projects.map((project) => [
+      project,
+      actions.filter((action) => projectIdentity(action.project) === projectIdentity(project)).length,
+    ])),
+    [actions, projects],
+  );
   const attention = actions
     .filter(
       (a) => !a.completed && (state(a) === 'Crítico' || state(a) === 'Atenção'),
@@ -716,7 +723,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 onClick={() => setSelectedProject((current) => current === p ? null : p)}
                 aria-pressed={selectedProject === p}
               >
-                <i style={{ backgroundColor: projectColor(p, projectColors) }} /> {p}
+                <i style={{ backgroundColor: projectColor(p, projectColors) }} /> {p} ({projectActionCounts[p] || 0})
               </button>
             ))}
           </div>
