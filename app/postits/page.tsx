@@ -91,7 +91,10 @@ const projectColor = (project: string, colors: Record<string, string>) => {
   const exactOrEquivalent = colors[project] || Object.entries(colors).find(([name]) =>
     name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase() === normalized,
   )?.[1];
-  return exactOrEquivalent || (normalized === 'alpek' ? '#9bcf9e' : '#d8e5e5');
+  if (exactOrEquivalent) return exactOrEquivalent;
+  if (normalized === 'alpek') return '#f3a3b3';
+  if (normalized === 'rnest') return '#9bcf9e';
+  return '#d8e5e5';
 };
 const seed: Action[] = [
   {

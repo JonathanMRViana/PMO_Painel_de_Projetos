@@ -31,6 +31,8 @@ async function ensureDefaults() {
       db.prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND name = 'ECOPÓS' AND color = ?")
         .bind('#9bc6bb', '#4b5558'),
       db.prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND upper(name) = 'ALPEK'")
+        .bind('#f3a3b3'),
+      db.prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND upper(name) = 'RNEST'")
         .bind('#9bcf9e'),
     ]);
     return;
