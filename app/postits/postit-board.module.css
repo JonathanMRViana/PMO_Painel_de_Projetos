@@ -17,3 +17,13 @@
 .dropReady:hover { background:#dcefe9; box-shadow:inset 0 0 0 3px #16856f; }
 .dropReady:hover::after { content:'Soltar ação aqui'; position:absolute; inset:8px; z-index:10; display:grid; place-items:center; border:2px dashed #16856f; border-radius:6px; background:rgb(220 239 233 / .92); color:#0b6252; font-size:12px; font-weight:800; letter-spacing:.04em; pointer-events:none; }
 .dropReady:hover .postit { opacity:.16; }
+
+/* Os indicadores antecedem o quadro, como uma barra de decisão. */
+.page { display:flex; flex-direction:column; }
+.header { order:1; }
+.footerGrid { order:2; margin-top:0; margin-bottom:18px; }
+.boardShell { order:3; }
+.board { grid-auto-rows:minmax(134px, max-content); }
+.legendButton, .legendActive { display:flex; align-items:center; gap:5px; border:0; border-radius:5px; padding:3px 5px; background:transparent; color:#4c5a61; cursor:pointer; font:inherit; font-size:10px; font-weight:700; }
+.legendButton:hover, .legendActive { background:#dcece8; color:#0d5963; }
+.legendButton i, .legendActive i { width:12px; height:12px; border-radius:2px; }

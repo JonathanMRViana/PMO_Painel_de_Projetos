@@ -22,16 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import styles from './postit-board.module.css';
 type Day = 'seg' | 'ter' | 'qua' | 'qui' | 'sex' | 'd7';
-type Sector =
-  | 'Manutenção'
-  | 'Operação / MKT'
-  | 'Suprimentos'
-  | 'Financeiro'
-  | 'DP / Gente & Gestão'
-  | 'CDI'
-  | 'Engenharia'
-  | 'SMS';
-type Project = 'AMP' | '5S8' | 'ALPPEX' | 'RINVEST' | 'ECOPÓS' | 'Geral';
+type Sector = string;
+type Project = string;
 type Criticality = 'Baixo' | 'Médio' | 'Alto' | 'Crítico';
 type Status = 'No prazo' | 'Atenção' | 'Crítico' | 'Concluído';
 type Action = {
@@ -54,7 +46,7 @@ const days: { id: Day; label: string; date: string }[] = [
   { id: 'sex', label: 'Sexta', date: '18 set' },
   { id: 'd7', label: 'D+7', date: 'até 25 set' },
 ];
-const sectors: Sector[] = [
+const defaultSectors: Sector[] = [
   'Manutenção',
   'Operação / MKT',
   'Suprimentos',
@@ -64,7 +56,7 @@ const sectors: Sector[] = [
   'Engenharia',
   'SMS',
 ];
-const projects: Project[] = [
+const defaultProjects: Project[] = [
   'AMP',
   '5S8',
   'ALPPEX',
@@ -240,6 +232,12 @@ export default function PostitBoardPage() {
     [editing, setEditing] = useState<Action | null>(null),
     [creating, setCreating] = useState(false),
     [showCompleted, setShowCompleted] = useState(false),
+    [projects, setProjects] = useState<Project[]>(defaultProjects),
+    [sectors, setSectors] = useState<Sector[]>(defaultSectors),
+    [projectColors, setProjectColors] = useState<Record<string, string>>({}),
+    [selectedProject, setSelectedProject] = useState<string | null>(null),
+    [catalogType, setCatalogType] = useState<'project' | 'sector' | null>(null),
+    [catalogName, setCatalogName] = useState(''),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
     void load();
@@ -248,10 +246,19 @@ export default function PostitBoardPage() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch('/api/postit-actions', { cache: 'no-store' });
+      const [r, catalogResponse] = await Promise.all([
+        fetch('/api/postit-actions', { cache: 'no-store' }),
+        fetch('/api/postit-catalog', { cache: 'no-store' }),
+      ]);
       const data = (await r.json()) as { actions?: Action[]; error?: string };
+      const catalog = (await catalogResponse.json()) as { projects?: { name: string; color?: string }[]; sectors?: { name: string }[] };
       if (!r.ok)
         throw new Error(data.error || 'Não foi possível carregar o quadro.');
+      if (catalogResponse.ok) {
+        setProjects(catalog.projects?.map((item) => item.name) || defaultProjects);
+        setSectors(catalog.sectors?.map((item) => item.name) || defaultSectors);
+        setProjectColors(Object.fromEntries((catalog.projects || []).map((item) => [item.name, item.color || '#d8e5e5'])));
+      }
       if (data.actions?.length) {
         setActions(data.actions);
         return;
@@ -269,7 +276,11 @@ export default function PostitBoardPage() {
     }
   }
   // O modo de concluídos complementa o quadro: as ações abertas continuam visíveis.
-  const visible = actions.filter((a) => showCompleted || !a.completed);
+  const visible = actions.filter(
+    (a) =>
+      (showCompleted || !a.completed) &&
+      (!selectedProject || a.project === selectedProject),
+  );
   const counters = useMemo(
     () =>
       statuses.map((status) => ({
@@ -374,6 +385,31 @@ export default function PostitBoardPage() {
     void move(e.dataTransfer.getData('text/plain') || dragged || '', d, s);
     setDragged(null);
   };
+  async function saveCatalog() {
+    if (!catalogType || !catalogName.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const colors = ['#d9c7f3', '#aee4ec', '#f7c2c5', '#bce8c8', '#f1e6a9', '#e6d3a3'];
+      const response = await fetch('/api/postit-catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: catalogType, name: catalogName, color: colors[projects.length % colors.length] }),
+      });
+      const data = await response.json() as { item?: { name: string; color?: string }; error?: string };
+      if (!response.ok || !data.item) throw new Error(data.error || 'Não foi possível salvar o cadastro.');
+      if (catalogType === 'project') {
+        setProjects((all) => [...all, data.item!.name]);
+        setProjectColors((all) => ({ ...all, [data.item!.name]: data.item!.color || '#d8e5e5' }));
+      } else setSectors((all) => [...all, data.item!.name]);
+      setCatalogName('');
+      setCatalogType(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível salvar o cadastro.');
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -401,6 +437,12 @@ export default function PostitBoardPage() {
             <div className={styles.weekBadge}>
               <CalendarDays size={17} /> 14–18 set 2026
             </div>
+            <Button variant="outline" onClick={() => setCatalogType('project')}>
+              <Plus /> Projeto
+            </Button>
+            <Button variant="outline" onClick={() => setCatalogType('sector')}>
+              <Plus /> Setor
+            </Button>
             <Button className={styles.newButton} onClick={create}>
               <Plus /> Nova ação
             </Button>
@@ -446,6 +488,7 @@ export default function PostitBoardPage() {
                       <article
                         key={a.id}
                         className={cn(a)}
+                        style={{ backgroundColor: projectColors[a.project] }}
                         draggable
                         onDragStart={(e) => drag(e, a.id)}
                         onDragEnd={() => setDragged(null)}
@@ -498,12 +541,18 @@ export default function PostitBoardPage() {
           </div>
           <div className={styles.legend}>
             {projects.map((p) => (
-              <span key={p}>
-                <i className={styles['project' + p]} /> {p}
-              </span>
+              <button
+                key={p}
+                type="button"
+                className={selectedProject === p ? styles.legendActive : styles.legendButton}
+                onClick={() => setSelectedProject((current) => current === p ? null : p)}
+                aria-pressed={selectedProject === p}
+              >
+                <i style={{ backgroundColor: projectColors[p] }} /> {p}
+              </button>
             ))}
           </div>
-          <p>As cores identificam o projeto de cada ação.</p>
+          <p>{selectedProject ? `Exibindo ${selectedProject}. Clique novamente para ver todos.` : 'Clique em um projeto para filtrar o quadro.'}</p>
         </div>
         <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
@@ -661,6 +710,22 @@ export default function PostitBoardPage() {
               <X size={14} /> Excluir ação
             </button>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); } }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>{catalogType === 'project' ? 'Novo projeto' : 'Novo setor'}</DialogTitle>
+            <DialogDescription>{catalogType === 'project' ? 'O projeto ficará disponível no quadro e identificado por uma nova cor.' : 'O setor será adicionado como uma nova linha no quadro semanal.'}</DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label htmlFor="catalog-name">Nome</Label>
+            <Input id="catalog-name" value={catalogName} onChange={(e) => setCatalogName(e.target.value)} placeholder={catalogType === 'project' ? 'Ex.: Projeto Alfa' : 'Ex.: Qualidade'} />
+          </div>
+          <div className={styles.dialogFooter}>
+            <Button variant="outline" onClick={() => setCatalogType(null)}>Cancelar</Button>
+            <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>Adicionar</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </main>

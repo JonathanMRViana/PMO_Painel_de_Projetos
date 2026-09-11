@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -245,6 +245,7 @@ function MetricCard({
 }
 
 export default function Home() {
+  const [boardProjects, setBoardProjects] = useState<string[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [healthFilter, setHealthFilter] = useState<'Todos' | Health>('Todos');
   const [query, setQuery] = useState('');
@@ -256,6 +257,12 @@ export default function Home() {
     title: string;
     meta: string;
   } | null>(null);
+  useEffect(() => {
+    void fetch('/api/postit-catalog', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data: { projects?: { name: string }[] }) => setBoardProjects(data.projects?.map((item) => item.name) || []))
+      .catch(() => undefined);
+  }, []);
   const filteredProjects = useMemo(
     () =>
       portfolio.filter(
@@ -472,8 +479,8 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
               <MetricCard
                 label="Projetos ativos"
-                value="15"
-                note="3 em mobilização"
+                value={String(15 + Math.max(0, boardProjects.length - 6))}
+                note={boardProjects.length > 6 ? `${boardProjects.length - 6} incluído(s) no quadro semanal` : '3 em mobilização'}
                 icon={BriefcaseBusiness}
               />
               <MetricCard
@@ -614,7 +621,7 @@ export default function Home() {
             <Card className="border-0 shadow-sm ring-1 ring-slate-200/80">
               <CardHeader>
                 <CardTitle>Saúde da carteira</CardTitle>
-                <CardDescription>15 projetos ativos</CardDescription>
+                <CardDescription>{15 + Math.max(0, boardProjects.length - 6)} projetos ativos</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="relative mx-auto h-[190px] max-w-[250px]">

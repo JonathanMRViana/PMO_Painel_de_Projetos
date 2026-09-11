@@ -13,9 +13,27 @@ export const postitActions = sqliteTable(
     project: text('project').notNull(),
     status: text('status').notNull(),
     criticality: text('criticality').notNull().default('Médio'),
-    completed: integer('completed', { mode: 'boolean' }).notNull().default(false),
+    completed: integer('completed', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
     updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
   },
-  (table) => [index('idx_postit_actions_sector_day').on(table.sector, table.boardDay)],
+  (table) => [
+    index('idx_postit_actions_sector_day').on(table.sector, table.boardDay),
+  ],
+);
+
+export const postitBoardCatalog = sqliteTable(
+  'postit_board_catalog',
+  {
+    id: text('id').primaryKey(),
+    type: text('type').notNull(),
+    name: text('name').notNull(),
+    color: text('color'),
+    createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
+  },
+  (table) => [
+    index('idx_postit_board_catalog_type_name').on(table.type, table.name),
+  ],
 );
