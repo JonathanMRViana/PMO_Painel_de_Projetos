@@ -245,6 +245,7 @@ export default function PostitBoardPage() {
     [saving, setSaving] = useState(false),
     [error, setError] = useState<string | null>(null),
     [dragged, setDragged] = useState<string | null>(null),
+    [dropTarget, setDropTarget] = useState<string | null>(null),
     [editing, setEditing] = useState<Action | null>(null),
     [creating, setCreating] = useState(false),
     [showCompleted, setShowCompleted] = useState(false),
@@ -405,12 +406,14 @@ export default function PostitBoardPage() {
   }
   const drag = (e: DragEvent<HTMLElement>, id: string) => {
     e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
     setDragged(id);
   };
   const drop = (e: DragEvent<HTMLDivElement>, d: Day, s: Sector) => {
     e.preventDefault();
     void move(e.dataTransfer.getData('text/plain') || dragged || '', d, s);
     setDragged(null);
+    setDropTarget(null);
   };
   async function saveCatalog() {
     if (!catalogType || !catalogName.trim()) return;
@@ -503,8 +506,10 @@ export default function PostitBoardPage() {
                   className={[
                     styles.cell,
                     dragged ? styles.dropReady : '',
+                    dropTarget === `${sector}-${d.id}` ? styles.dropActive : '',
                   ].join(' ')}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragEnter={() => setDropTarget(`${sector}-${d.id}`)}
+                  onDragOver={(e) => { e.preventDefault(); setDropTarget(`${sector}-${d.id}`); }}
                   onDrop={(e) => drop(e, d.id, sector)}
                 >
                   {visible
@@ -516,7 +521,7 @@ export default function PostitBoardPage() {
                         style={{ backgroundColor: projectColors[a.project] }}
                         draggable
                         onDragStart={(e) => drag(e, a.id)}
-                        onDragEnd={() => setDragged(null)}
+                        onDragEnd={() => { setDragged(null); setDropTarget(null); }}
                       >
                         <button
                           className={styles.postitBody}

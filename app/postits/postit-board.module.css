@@ -27,3 +27,11 @@
 .legendButton, .legendActive { display:flex; align-items:center; gap:5px; border:0; border-radius:5px; padding:3px 5px; background:transparent; color:#4c5a61; cursor:pointer; font:inherit; font-size:10px; font-weight:700; }
 .legendButton:hover, .legendActive { background:#dcece8; color:#0d5963; }
 .legendButton i, .legendActive i { width:12px; height:12px; border-radius:2px; }
+
+/* Uma ação ganha presença; duas ou mais se organizam em duas colunas. */
+.cell > .postit:only-child { grid-column:1 / -1; }
+
+/* O destino do arraste permanece marcado mesmo sobre post-its existentes. */
+.dropActive { background:#dcefe9 !important; box-shadow:inset 0 0 0 3px #16856f; }
+.dropActive::after { content:'Soltar ação aqui'; position:absolute; inset:8px; z-index:20; display:grid; place-items:center; border:2px dashed #16856f; border-radius:6px; background:rgb(220 239 233 / .92); color:#0b6252; font-size:12px; font-weight:800; letter-spacing:.04em; pointer-events:none; }
+.dropActive .postit { opacity:.16; }
