@@ -5,7 +5,7 @@ const defaultProjects = [
   ['5S8', '#aee4ec'],
   ['ALPPEX', '#f7c2c5'],
   ['RINVEST', '#bce8c8'],
-  ['ECOPÓS', '#4b5558'],
+  ['ECOPÓS', '#9bc6bb'],
   ['Geral', '#f1e6a9'],
 ];
 const defaultSectors = [
@@ -24,7 +24,14 @@ async function ensureDefaults() {
   const existing = await db
     .prepare('SELECT COUNT(*) AS total FROM postit_board_catalog')
     .first<{ total: number }>();
-  if (existing?.total) return;
+  if (existing?.total) {
+    // Atualiza somente a antiga cor padrão escura; cores escolhidas manualmente são preservadas.
+    await db
+      .prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND name = 'ECOPÓS' AND color = ?")
+      .bind('#9bc6bb', '#4b5558')
+      .run();
+    return;
+  }
   const statements = [
     ...defaultProjects.map(([name, color]) =>
       db

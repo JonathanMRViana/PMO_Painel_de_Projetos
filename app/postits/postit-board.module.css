@@ -56,6 +56,9 @@
 .dateAudit ul { margin:8px 0 0; padding-left:18px; }
 .dateAudit li { margin:5px 0; }
 .dateAudit li span { margin-left:6px; color:#87949a; font-size:11px; }
+.projectECOPÓS { background:#9bc6bb; color:#263036; }
+.projectECOPÓS .postitTop, .projectECOPÓS .observation, .projectECOPÓS .owner { color:#263036; }
+.postitBody .postitTop, .postitBody .observation, .postitBody .owner { color:inherit; opacity:.72; }
 .projectManager { display:grid; gap:8px; max-height:48vh; overflow:auto; }
 .projectManagerItem { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid #dce3e2; border-radius:8px; padding:9px 10px; color:#40545a; font-size:13px; font-weight:750; }
 .projectManagerItem > span { display:flex; align-items:center; gap:8px; min-width:0; }

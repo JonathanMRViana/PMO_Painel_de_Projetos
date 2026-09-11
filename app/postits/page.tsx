@@ -80,6 +80,12 @@ const defaultProjects: Project[] = [
 ];
 const criticalities: Criticality[] = ['Baixo', 'Médio', 'Alto', 'Crítico'];
 const statuses: Status[] = ['No prazo', 'Atenção', 'Crítico', 'Concluído'];
+const projectTextColor = (color?: string) => {
+  const hex = color?.replace('#', '');
+  if (!hex || !/^[0-9a-f]{6}$/i.test(hex)) return '#263036';
+  const [r, g, b] = [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6)].map((value) => Number.parseInt(value, 16));
+  return (r * 299 + g * 587 + b * 114) / 1000 < 145 ? '#ffffff' : '#263036';
+};
 const seed: Action[] = [
   {
     id: '1',
@@ -599,7 +605,7 @@ export default function PostitBoardPage() {
                       <article
                         key={a.id}
                         className={cn(a)}
-                        style={{ backgroundColor: projectColors[a.project] }}
+                        style={{ backgroundColor: projectColors[a.project], color: projectTextColor(projectColors[a.project]) }}
                         draggable
                         onDragStart={(e) => drag(e, a.id)}
                         onDragEnd={() => { setDragged(null); setDropTarget(null); }}
