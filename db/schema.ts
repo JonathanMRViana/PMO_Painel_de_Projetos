@@ -1,4 +1,4 @@
-import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const postitActions = sqliteTable(
   'postit_actions',
@@ -12,6 +12,8 @@ export const postitActions = sqliteTable(
     sector: text('sector').notNull(),
     project: text('project').notNull(),
     status: text('status').notNull(),
+    criticality: text('criticality').notNull().default('Médio'),
+    completed: integer('completed', { mode: 'boolean' }).notNull().default(false),
     createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
     updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
   },
