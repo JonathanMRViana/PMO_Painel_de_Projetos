@@ -109,3 +109,25 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const body = (await request.json()) as { type?: string; oldName?: string; name?: string };
+    const type = body.type === 'sector' ? body.type : '';
+    const oldName = body.oldName?.trim() ?? '';
+    const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
+    if (!type || !oldName || !name || name.length > 40) throw new Error('Informe um nome de até 40 caracteres.');
+    if (name !== oldName) {
+      const duplicate = await getDb().prepare('SELECT id FROM postit_board_catalog WHERE type = ? AND lower(name) = lower(?)').bind(type, name).first();
+      if (duplicate) throw new Error('Este setor já existe.');
+    }
+    const db = getDb();
+    await db.batch([
+      db.prepare('UPDATE postit_board_catalog SET name = ? WHERE type = ? AND name = ?').bind(name, type, oldName),
+      db.prepare('UPDATE postit_actions SET sector = ? WHERE sector = ?').bind(name, oldName),
+    ]);
+    return Response.json({ item: { type, name }, oldName });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar o setor.' }, { status: 400 });
+  }
+}

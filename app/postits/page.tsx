@@ -256,6 +256,7 @@ export default function PostitBoardPage() {
     [catalogType, setCatalogType] = useState<'project' | 'sector' | null>(null),
     [catalogName, setCatalogName] = useState(''),
     [catalogColor, setCatalogColor] = useState('#d9c7f3'),
+    [editingSector, setEditingSector] = useState<string | null>(null),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
     void load();
@@ -422,18 +423,22 @@ export default function PostitBoardPage() {
     setError(null);
     try {
       const response = await fetch('/api/postit-catalog', {
-        method: 'POST',
+        method: editingSector ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: catalogType, name: catalogName, color: catalogColor }),
+        body: JSON.stringify(editingSector ? { type: 'sector', oldName: editingSector, name: catalogName } : { type: catalogType, name: catalogName, color: catalogColor }),
       });
       const data = await response.json() as { item?: { name: string; color?: string }; error?: string };
       if (!response.ok || !data.item) throw new Error(data.error || 'Não foi possível salvar o cadastro.');
-      if (catalogType === 'project') {
+      if (editingSector) {
+        setSectors((all) => all.map((sector) => sector === editingSector ? data.item!.name : sector));
+        setActions((all) => all.map((action) => action.sector === editingSector ? { ...action, sector: data.item!.name } : action));
+      } else if (catalogType === 'project') {
         setProjects((all) => [...all, data.item!.name]);
         setProjectColors((all) => ({ ...all, [data.item!.name]: data.item!.color || '#d8e5e5' }));
       } else setSectors((all) => [...all, data.item!.name]);
       setCatalogName('');
       setCatalogColor('#d9c7f3');
+      setEditingSector(null);
       setCatalogType(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível salvar o cadastro.');
@@ -500,7 +505,7 @@ export default function PostitBoardPage() {
           ))}
           {sectors.map((sector) => (
             <div className={styles.row} key={sector}>
-              <div className={styles.sectorLabel}>{sector}</div>
+              <button className={styles.sectorLabel} onClick={() => { setCatalogType('sector'); setEditingSector(sector); setCatalogName(sector); }}> {sector} </button>
               {days.map((d) => (
                 <div
                   key={d.id}
@@ -730,11 +735,11 @@ export default function PostitBoardPage() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); } }}>
+      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{catalogType === 'project' ? 'Novo projeto' : 'Novo setor'}</DialogTitle>
-            <DialogDescription>{catalogType === 'project' ? 'O projeto ficará disponível no quadro e identificado por uma nova cor.' : 'O setor será adicionado como uma nova linha no quadro semanal.'}</DialogDescription>
+            <DialogTitle>{catalogType === 'project' ? 'Novo projeto' : editingSector ? 'Editar setor' : 'Novo setor'}</DialogTitle>
+            <DialogDescription>{catalogType === 'project' ? 'O projeto ficará disponível no quadro e identificado por uma nova cor.' : editingSector ? 'A nova nomenclatura será aplicada aos post-its deste setor.' : 'O setor será adicionado como uma nova linha no quadro semanal.'}</DialogDescription>
           </DialogHeader>
           <div>
             <Label htmlFor="catalog-name">Nome</Label>
@@ -750,7 +755,7 @@ export default function PostitBoardPage() {
           </div>}
           <div className={styles.dialogFooter}>
             <Button variant="outline" onClick={() => setCatalogType(null)}>Cancelar</Button>
-            <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>Adicionar</Button>
+            <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>{editingSector ? 'Salvar setor' : 'Adicionar'}</Button>
           </div>
         </DialogContent>
       </Dialog>
