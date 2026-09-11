@@ -38,13 +38,13 @@ type Action = {
   criticality: Criticality;
   completed: boolean;
 };
-const days: { id: Day; label: string; date: string }[] = [
-  { id: 'seg', label: 'Segunda', date: '14 set' },
-  { id: 'ter', label: 'Terça', date: '15 set' },
-  { id: 'qua', label: 'Quarta', date: '16 set' },
-  { id: 'qui', label: 'Quinta', date: '17 set' },
-  { id: 'sex', label: 'Sexta', date: '18 set' },
-  { id: 'd7', label: 'D+7', date: 'até 25 set' },
+const days: { id: Day; label: string }[] = [
+  { id: 'seg', label: 'Segunda' },
+  { id: 'ter', label: 'Terça' },
+  { id: 'qua', label: 'Quarta' },
+  { id: 'qui', label: 'Quinta' },
+  { id: 'sex', label: 'Sexta' },
+  { id: 'd7', label: 'D+7' },
 ];
 const defaultSectors: Sector[] = [
   'Manutenção',
@@ -180,17 +180,33 @@ const empty = (): Omit<Action, 'id'> => ({
   title: '',
   observation: '',
   owner: '',
-  date: '2026-09-14',
+  date: '',
   day: 'seg',
   sector: 'Manutenção',
   project: 'Geral',
   criticality: 'Médio',
   completed: false,
 });
-const date = (v: string) => {
-  const [, m, d] = v.split('-');
-  return m && d ? d + '/' + m : 'Sem data';
-};
+const dayIndexes: Record<Exclude<Day, 'd7'>, number> = { seg: 1, ter: 2, qua: 3, qui: 4, sex: 5 };
+const isoDate = (value: Date) => value.toISOString().slice(0, 10);
+function dateForDay(day: Day, deferredDay: Day = 'sex') {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const requested = day === 'd7' ? (deferredDay === 'd7' ? 'sex' : deferredDay) : day;
+  let distance = (dayIndexes[requested] - today.getDay() + 7) % 7;
+  if (day === 'd7' && distance <= 6) distance += 7;
+  const result = new Date(today);
+  result.setDate(today.getDate() + distance);
+  return isoDate(result);
+}
+function boardDay(dateValue: string): Day {
+  const due = new Date(dateValue + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const distance = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+  if (distance < 0 || distance > 6) return 'd7';
+  return ({ 1: 'seg', 2: 'ter', 3: 'qua', 4: 'qui', 5: 'sex' }[due.getDay()] as Day | undefined) || 'd7';
+}
 const dayDiff = (v: string) =>
   Math.ceil(
     (new Date(v + 'T00:00:00').getTime() -
@@ -260,7 +276,17 @@ export default function PostitBoardPage() {
         setProjectColors(Object.fromEntries((catalog.projects || []).map((item) => [item.name, item.color || '#d8e5e5'])));
       }
       if (data.actions?.length) {
-        setActions(data.actions);
+        const normalized = data.actions.map((action) =>
+          dayDiff(action.date) < 0
+            ? { ...action, date: dateForDay(action.day) }
+            : action,
+        );
+        setActions(normalized);
+        void Promise.all(
+          normalized
+            .filter((action, index) => action.date !== data.actions![index].date)
+            .map((action) => api('PUT', action)),
+        );
         return;
       }
       const saved = await Promise.all(
@@ -300,11 +326,12 @@ export default function PostitBoardPage() {
     setEditing(a);
   };
   const create = () => {
-    setForm(empty());
+    const draft = empty();
+    setForm({ ...draft, date: dateForDay(draft.day) });
     setCreating(true);
   };
   async function save() {
-    if (!form.title.trim() || !form.owner.trim()) return;
+    if (!form.title.trim() || !form.owner.trim() || !form.date) return;
     setSaving(true);
     setError(null);
     try {
@@ -330,7 +357,7 @@ export default function PostitBoardPage() {
   async function move(id: string, day: Day, sector: Sector) {
     const before = actions.find((a) => a.id === id);
     if (!before || (before.day === day && before.sector === sector)) return;
-    const changed = { ...before, day, sector };
+    const changed = { ...before, day, sector, date: dateForDay(day, before.day) };
     setActions((all) => all.map((a) => (a.id === id ? changed : a)));
     setError(null);
     try {
@@ -423,8 +450,7 @@ export default function PostitBoardPage() {
             </div>
             <h1>Quadro semanal de ações</h1>
             <p>
-              Arraste os post-its entre dias ou setores. O status acompanha a
-              data prevista.
+              Organize as ações na janela móvel de acompanhamento.
             </p>
           </div>
           <div className={styles.headerActions}>
@@ -435,7 +461,7 @@ export default function PostitBoardPage() {
               {showCompleted ? 'Ocultar concluídos' : 'Visualizar concluídos'}
             </Button>
             <div className={styles.weekBadge}>
-              <CalendarDays size={17} /> 14–18 set 2026
+              <CalendarDays size={17} /> Janela móvel D+7
             </div>
             <Button variant="outline" onClick={() => setCatalogType('project')}>
               <Plus /> Projeto
@@ -466,7 +492,6 @@ export default function PostitBoardPage() {
               key={d.id}
             >
               <strong>{d.label}</strong>
-              <span>{d.date}</span>
             </div>
           ))}
           {sectors.map((sector) => (
@@ -483,7 +508,7 @@ export default function PostitBoardPage() {
                   onDrop={(e) => drop(e, d.id, sector)}
                 >
                   {visible
-                    .filter((a) => a.sector === sector && a.day === d.id)
+                    .filter((a) => a.sector === sector && boardDay(a.date) === d.id)
                     .map((a) => (
                       <article
                         key={a.id}
@@ -500,7 +525,6 @@ export default function PostitBoardPage() {
                           <span className={styles.postitTop}>
                             <GripVertical size={14} />
                             <em>{a.project}</em>
-                            <b>{date(a.date)}</b>
                           </span>
                           <strong>{a.title}</strong>
                           <span className={styles.observation}>
@@ -597,9 +621,7 @@ export default function PostitBoardPage() {
                   className={styles['status' + state(a).replace(' ', '')]}
                 />
                 <b>{a.title}</b>
-                <small>
-                  {a.owner} · {date(a.date)} · {a.criticality}
-                </small>
+                <small>{a.owner} · {a.criticality}</small>
               </li>
             ))}
           </ul>
@@ -618,8 +640,7 @@ export default function PostitBoardPage() {
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar ação' : 'Nova ação'}</DialogTitle>
             <DialogDescription>
-              O status é calculado pela data prevista. A criticidade é definida
-              separadamente.
+              O prazo é calculado automaticamente pela posição no quadro.
             </DialogDescription>
           </DialogHeader>
           <div className={styles.form}>
@@ -649,15 +670,6 @@ export default function PostitBoardPage() {
                 onChange={(e) => setForm({ ...form, owner: e.target.value })}
               />
             </div>
-            <div>
-              <Label htmlFor="date">Data prevista de finalização</Label>
-              <Input
-                id="date"
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-              />
-            </div>
             <Field
               label="Setor"
               value={form.sector}
@@ -668,7 +680,7 @@ export default function PostitBoardPage() {
               label="Dia no quadro"
               value={form.day}
               options={days.map((d) => ({ value: d.id, label: d.label }))}
-              set={(v) => setForm({ ...form, day: v as Day })}
+              set={(v) => setForm({ ...form, day: v as Day, date: dateForDay(v as Day, form.day) })}
             />
             <Field
               label="Projeto"
