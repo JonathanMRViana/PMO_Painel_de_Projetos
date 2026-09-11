@@ -10,6 +10,7 @@ import {
   Boxes,
   BriefcaseBusiness,
   CalendarClock,
+  CalendarDays,
   ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
@@ -180,6 +181,7 @@ const curveConfig = {
 } satisfies ChartConfig;
 const navigation = [
   { label: 'Visão executiva', icon: LayoutDashboard, href: '#visao' },
+  { label: 'Quadro semanal', icon: CalendarDays, href: '/postits' },
   { label: 'Portfólio', icon: BriefcaseBusiness, href: '#portfolio' },
   { label: 'Planejamento', icon: CalendarClock, href: '#desempenho' },
   { label: 'Financeiro', icon: CircleDollarSign, href: '#financeiro' },
