@@ -27,10 +27,12 @@ async function ensureDefaults() {
     .first<{ total: number }>();
   if (existing?.total) {
     // Atualiza somente a antiga cor padrão escura; cores escolhidas manualmente são preservadas.
-    await db
-      .prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND name = 'ECOPÓS' AND color = ?")
-      .bind('#9bc6bb', '#4b5558')
-      .run();
+    await db.batch([
+      db.prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND name = 'ECOPÓS' AND color = ?")
+        .bind('#9bc6bb', '#4b5558'),
+      db.prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND upper(name) = 'ALPEK'")
+        .bind('#9bcf9e'),
+    ]);
     return;
   }
   const statements = [

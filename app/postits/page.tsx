@@ -86,6 +86,13 @@ const projectTextColor = (color?: string) => {
   const [r, g, b] = [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6)].map((value) => Number.parseInt(value, 16));
   return (r * 299 + g * 587 + b * 114) / 1000 < 145 ? '#ffffff' : '#263036';
 };
+const projectColor = (project: string, colors: Record<string, string>) => {
+  const normalized = project.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const exactOrEquivalent = colors[project] || Object.entries(colors).find(([name]) =>
+    name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase() === normalized,
+  )?.[1];
+  return exactOrEquivalent || (normalized === 'alpek' ? '#9bcf9e' : '#d8e5e5');
+};
 const seed: Action[] = [
   {
     id: '1',
@@ -641,7 +648,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                       <article
                         key={a.id}
                         className={cn(a)}
-                        style={{ backgroundColor: projectColors[a.project], color: projectTextColor(projectColors[a.project]) }}
+                        style={{ backgroundColor: projectColor(a.project, projectColors), color: projectTextColor(projectColor(a.project, projectColors)) }}
                         draggable={canEdit}
                         onDragStart={(e) => canEdit && drag(e, a.id)}
                         onDragEnd={() => { if (canEdit) { setDragged(null); setDropTarget(null); } }}
