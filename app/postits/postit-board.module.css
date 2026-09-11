@@ -35,3 +35,6 @@
 .dropActive { background:#dcefe9 !important; box-shadow:inset 0 0 0 3px #16856f; }
 .dropActive::after { content:'Soltar ação aqui'; position:absolute; inset:8px; z-index:20; display:grid; place-items:center; border:2px dashed #16856f; border-radius:6px; background:rgb(220 239 233 / .92); color:#0b6252; font-size:12px; font-weight:800; letter-spacing:.04em; pointer-events:none; }
 .dropActive .postit { opacity:.16; }
+
+/* Cabeçalho, indicadores e quadro compartilham a mesma régua horizontal. */
+.header, .footerGrid, .boardShell { width:min(100%, 1640px); align-self:center; }
