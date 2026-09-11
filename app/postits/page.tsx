@@ -92,12 +92,13 @@ const projectIdentity = (project: string) => {
 };
 const projectColor = (project: string, colors: Record<string, string>) => {
   const normalized = projectIdentity(project);
+  // Paleta oficial: não deixa cores antigas gravadas no catálogo alterarem a leitura do quadro.
+  if (normalized === 'alpek') return '#f3a3b3';
+  if (normalized === 'rnest') return '#9bcf9e';
   const exactOrEquivalent = colors[project] || Object.entries(colors).find(([name]) =>
     projectIdentity(name) === normalized,
   )?.[1];
   if (exactOrEquivalent) return exactOrEquivalent;
-  if (normalized === 'alpek') return '#f3a3b3';
-  if (normalized === 'rnest') return '#9bcf9e';
   return '#d8e5e5';
 };
 const seed: Action[] = [
@@ -715,7 +716,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 onClick={() => setSelectedProject((current) => current === p ? null : p)}
                 aria-pressed={selectedProject === p}
               >
-                <i style={{ backgroundColor: projectColors[p] }} /> {p}
+                <i style={{ backgroundColor: projectColor(p, projectColors) }} /> {p}
               </button>
             ))}
           </div>
@@ -904,7 +905,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           <div className={styles.projectManager}>
             {projects.map((project) => (
               <div key={project} className={styles.projectManagerItem}>
-                <span><i style={{ backgroundColor: projectColors[project] }} /> {project}</span>
+                <span><i style={{ backgroundColor: projectColor(project, projectColors) }} /> {project}</span>
                 <div>
                   <Button variant="outline" size="sm" onClick={() => openProjectEdit(project)}><Pencil /> Editar</Button>
                   <Button variant="outline" size="sm" className={styles.deleteProjectButton} onClick={() => setDeleteProjectPending(project)}><Trash2 /> Excluir</Button>
