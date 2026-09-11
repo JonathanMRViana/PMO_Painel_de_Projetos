@@ -67,3 +67,4 @@
 .projectManagerItem button { font-size:11px; }
 .deleteProjectButton, .deleteProjectConfirm { color:#a43636 !important; }
 .deleteProjectConfirm { background:#fff1f1 !important; border:1px solid #e7bcbc !important; }
+.loginError { margin:8px 0 0; color:#a43636; font-size:12px; }

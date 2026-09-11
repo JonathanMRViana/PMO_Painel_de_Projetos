@@ -1,4 +1,5 @@
 import { getDb } from '@/db';
+import { requireEditor } from '@/lib/editor-auth';
 
 const days = ['seg', 'ter', 'qua', 'qui', 'sex', 'd7'];
 const criticalities = ['Baixo', 'Médio', 'Alto', 'Crítico'];
@@ -90,6 +91,8 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
     const a = clean((await request.json()) as Payload);
     const createdAt = new Date().toISOString();
     await getDb()
@@ -119,6 +122,8 @@ export async function POST(request: Request) {
 }
 export async function PUT(request: Request) {
   try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
     const a = clean((await request.json()) as Payload);
     const db = getDb();
     const before = await db.prepare('SELECT action_date, created_at FROM postit_actions WHERE id = ?').bind(a.id).first<{ action_date: string; created_at: string }>();
@@ -151,6 +156,8 @@ export async function PUT(request: Request) {
 }
 export async function DELETE(request: Request) {
   try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
     const { id } = (await request.json()) as { id?: string };
     if (!id)
       return Response.json({ error: 'Ação não informada.' }, { status: 400 });

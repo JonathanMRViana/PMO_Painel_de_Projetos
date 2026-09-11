@@ -1,4 +1,5 @@
 import { getDb } from '@/db';
+import { requireEditor } from '@/lib/editor-auth';
 
 const defaultProjects = [
   ['AMP', '#d9c7f3'],
@@ -73,6 +74,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
     await ensureDefaults();
     const body = (await request.json()) as {
       type?: string;
@@ -119,6 +122,8 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
     const body = (await request.json()) as { type?: string; oldName?: string; name?: string; color?: string };
     const type = body.type === 'project' || body.type === 'sector' ? body.type : '';
     const oldName = body.oldName?.trim() ?? '';
@@ -147,6 +152,8 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
     const body = (await request.json()) as { type?: string; name?: string };
     const type = body.type === 'project' ? body.type : '';
     const name = body.name?.trim() ?? '';

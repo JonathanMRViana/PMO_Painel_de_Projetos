@@ -298,11 +298,25 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [editingProject, setEditingProject] = useState<string | null>(null),
     [managingProjects, setManagingProjects] = useState(false),
     [deleteProjectPending, setDeleteProjectPending] = useState<string | null>(null),
+    [editorMode, setEditorMode] = useState(false),
+    [authChecked, setAuthChecked] = useState(viewOnly),
+    [loginOpen, setLoginOpen] = useState(false),
+    [password, setPassword] = useState(''),
+    [loginError, setLoginError] = useState<string | null>(null),
     [dateHistory, setDateHistory] = useState<DateHistory[]>([]),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
-    void load();
-  }, []);
+    if (viewOnly) return;
+    void fetch('/api/editor-session', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data: { authenticated?: boolean }) => setEditorMode(Boolean(data.authenticated)))
+      .catch(() => setEditorMode(false))
+      .finally(() => setAuthChecked(true));
+  }, [viewOnly]);
+  useEffect(() => {
+    if (authChecked) void load();
+  }, [authChecked]);
+  const canEdit = !viewOnly && editorMode;
   async function load() {
     setLoading(true);
     setError(null);
@@ -334,7 +348,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
         );
         return;
       }
-      if (viewOnly) {
+      if (viewOnly || !canEdit) {
         setActions([]);
         return;
       }
@@ -349,6 +363,21 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     } finally {
       setLoading(false);
     }
+  }
+  async function signIn() {
+    setSaving(true);
+    setLoginError(null);
+    try {
+      const response = await fetch('/api/editor-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+      const data = await response.json() as { authenticated?: boolean; error?: string };
+      if (!response.ok || !data.authenticated) throw new Error(data.error || 'Não foi possível acessar a edição.');
+      setEditorMode(true);
+      setLoginOpen(false);
+      setPassword('');
+      void load();
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Não foi possível acessar a edição.');
+    } finally { setSaving(false); }
   }
   // O modo de concluídos complementa o quadro: as ações abertas continuam visíveis.
   const visible = actions.filter(
@@ -554,7 +583,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
             <div className={styles.weekBadge}>
               <CalendarDays size={17} /> Janela móvel D+7
             </div>
-            {!viewOnly && <>
+            {canEdit && <>
               <Button variant="outline" onClick={() => setCatalogType('project')}>
                 <Plus /> Projeto
               </Button>
@@ -568,6 +597,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 <Plus /> Nova ação
               </Button>
             </>}
+            {!viewOnly && !editorMode && <Button className={styles.newButton} onClick={() => setLoginOpen(true)}>Acessar edição</Button>}
           </div>
         </div>
         {error && (
@@ -592,18 +622,18 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           ))}
           {sectors.map((sector) => (
             <div className={styles.row} key={sector}>
-              <button className={styles.sectorLabel} disabled={viewOnly} onClick={() => { if (!viewOnly) { setCatalogType('sector'); setEditingSector(sector); setCatalogName(sector); } }}> {sector} </button>
+              <button className={styles.sectorLabel} disabled={!canEdit} onClick={() => { if (canEdit) { setCatalogType('sector'); setEditingSector(sector); setCatalogName(sector); } }}> {sector} </button>
               {days.map((d) => (
                 <div
                   key={d.id}
                   className={[
                     styles.cell,
-                    !viewOnly && dragged ? styles.dropReady : '',
-                    !viewOnly && dropTarget === `${sector}-${d.id}` ? styles.dropActive : '',
+                    canEdit && dragged ? styles.dropReady : '',
+                    canEdit && dropTarget === `${sector}-${d.id}` ? styles.dropActive : '',
                   ].join(' ')}
-                  onDragEnter={() => !viewOnly && setDropTarget(`${sector}-${d.id}`)}
-                  onDragOver={(e) => { if (!viewOnly) { e.preventDefault(); setDropTarget(`${sector}-${d.id}`); } }}
-                  onDrop={(e) => { if (!viewOnly) drop(e, d.id, sector); }}
+                  onDragEnter={() => canEdit && setDropTarget(`${sector}-${d.id}`)}
+                  onDragOver={(e) => { if (canEdit) { e.preventDefault(); setDropTarget(`${sector}-${d.id}`); } }}
+                  onDrop={(e) => { if (canEdit) drop(e, d.id, sector); }}
                 >
                   {visible
                     .filter((a) => a.sector === sector && boardDay(a.date) === d.id)
@@ -612,14 +642,14 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                         key={a.id}
                         className={cn(a)}
                         style={{ backgroundColor: projectColors[a.project], color: projectTextColor(projectColors[a.project]) }}
-                        draggable={!viewOnly}
-                        onDragStart={(e) => !viewOnly && drag(e, a.id)}
-                        onDragEnd={() => { if (!viewOnly) { setDragged(null); setDropTarget(null); } }}
+                        draggable={canEdit}
+                        onDragStart={(e) => canEdit && drag(e, a.id)}
+                        onDragEnd={() => { if (canEdit) { setDragged(null); setDropTarget(null); } }}
                       >
                         <button
                           className={styles.postitBody}
-                          disabled={viewOnly}
-                          onClick={() => { if (!viewOnly) edit(a); }}
+                          disabled={!canEdit}
+                          onClick={() => { if (canEdit) edit(a); }}
                         >
                           <span className={styles.postitTop}>
                             <GripVertical size={14} />
@@ -639,7 +669,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                             {a.criticality}
                           </span>
                         </button>
-                        {!viewOnly && <button
+                        {canEdit && <button
                           className={styles.completeButton}
                           disabled={saving}
                           onClick={() => void complete(a)}
@@ -726,7 +756,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </ul>
         </div>
       </section>
-      {!viewOnly && <Dialog
+      {canEdit && <Dialog
         open={creating || editing !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -827,7 +857,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           )}
         </DialogContent>
       </Dialog>}
-      {!viewOnly && <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); setEditingProject(null); } }}>
+      {canEdit && <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); setEditingProject(null); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>{editingProject ? 'Editar projeto' : catalogType === 'project' ? 'Novo projeto' : editingSector ? 'Editar setor' : 'Novo setor'}</DialogTitle>
@@ -851,7 +881,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </div>
         </DialogContent>
       </Dialog>}
-      {!viewOnly && <Dialog open={managingProjects} onOpenChange={setManagingProjects}>
+      {canEdit && <Dialog open={managingProjects} onOpenChange={setManagingProjects}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Gerenciar projetos</DialogTitle>
@@ -870,7 +900,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </div>
         </DialogContent>
       </Dialog>}
-      {!viewOnly && <AlertDialog open={deleteProjectPending !== null} onOpenChange={(open) => !open && setDeleteProjectPending(null)}>
+      {canEdit && <AlertDialog open={deleteProjectPending !== null} onOpenChange={(open) => !open && setDeleteProjectPending(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
@@ -882,6 +912,23 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>}
+      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+        <DialogContent className="sm:max-w-[380px]">
+          <DialogHeader>
+            <DialogTitle>Acessar edição</DialogTitle>
+            <DialogDescription>Informe a senha para editar o quadro semanal.</DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label htmlFor="editor-password">Senha</Label>
+            <Input id="editor-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void signIn(); }} autoFocus />
+            {loginError && <p className={styles.loginError}>{loginError}</p>}
+          </div>
+          <div className={styles.dialogFooter}>
+            <Button variant="outline" onClick={() => setLoginOpen(false)}>Cancelar</Button>
+            <Button className={styles.newButton} disabled={saving || !password} onClick={() => void signIn()}>{saving ? 'Validando…' : 'Entrar'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
