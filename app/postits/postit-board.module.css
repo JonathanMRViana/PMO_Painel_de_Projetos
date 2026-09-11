@@ -38,3 +38,8 @@
 
 /* Cabeçalho, indicadores e quadro compartilham a mesma régua horizontal. */
 .header, .footerGrid, .boardShell { width:min(100%, 1640px); align-self:center; }
+
+.colorChoice { display:grid; gap:7px; }
+.colorInput { display:flex; align-items:center; gap:9px; width:max-content; border:1px solid #d7dfe1; border-radius:8px; padding:6px 10px; background:#fff; color:#53636b; font-size:12px; font-weight:750; cursor:pointer; }
+.colorInput input { position:absolute; width:1px; height:1px; opacity:0; }
+.colorInput span { width:24px; height:24px; border:1px solid #26343b26; border-radius:5px; }

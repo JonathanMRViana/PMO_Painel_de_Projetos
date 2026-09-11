@@ -255,6 +255,7 @@ export default function PostitBoardPage() {
     [selectedProject, setSelectedProject] = useState<string | null>(null),
     [catalogType, setCatalogType] = useState<'project' | 'sector' | null>(null),
     [catalogName, setCatalogName] = useState(''),
+    [catalogColor, setCatalogColor] = useState('#d9c7f3'),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
     void load();
@@ -420,11 +421,10 @@ export default function PostitBoardPage() {
     setSaving(true);
     setError(null);
     try {
-      const colors = ['#d9c7f3', '#aee4ec', '#f7c2c5', '#bce8c8', '#f1e6a9', '#e6d3a3'];
       const response = await fetch('/api/postit-catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: catalogType, name: catalogName, color: colors[projects.length % colors.length] }),
+        body: JSON.stringify({ type: catalogType, name: catalogName, color: catalogColor }),
       });
       const data = await response.json() as { item?: { name: string; color?: string }; error?: string };
       if (!response.ok || !data.item) throw new Error(data.error || 'Não foi possível salvar o cadastro.');
@@ -433,6 +433,7 @@ export default function PostitBoardPage() {
         setProjectColors((all) => ({ ...all, [data.item!.name]: data.item!.color || '#d8e5e5' }));
       } else setSectors((all) => [...all, data.item!.name]);
       setCatalogName('');
+      setCatalogColor('#d9c7f3');
       setCatalogType(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível salvar o cadastro.');
@@ -729,7 +730,7 @@ export default function PostitBoardPage() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); } }}>
+      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>{catalogType === 'project' ? 'Novo projeto' : 'Novo setor'}</DialogTitle>
@@ -739,6 +740,14 @@ export default function PostitBoardPage() {
             <Label htmlFor="catalog-name">Nome</Label>
             <Input id="catalog-name" value={catalogName} onChange={(e) => setCatalogName(e.target.value)} placeholder={catalogType === 'project' ? 'Ex.: Projeto Alfa' : 'Ex.: Qualidade'} />
           </div>
+          {catalogType === 'project' && <div className={styles.colorChoice}>
+            <Label htmlFor="catalog-color">Cor do projeto</Label>
+            <label className={styles.colorInput}>
+              <input id="catalog-color" type="color" value={catalogColor} onChange={(e) => setCatalogColor(e.target.value)} aria-label="Escolher cor do projeto" />
+              <span style={{ backgroundColor: catalogColor }} />
+              {catalogColor.toUpperCase()}
+            </label>
+          </div>}
           <div className={styles.dialogFooter}>
             <Button variant="outline" onClick={() => setCatalogType(null)}>Cancelar</Button>
             <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>Adicionar</Button>
