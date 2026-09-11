@@ -529,9 +529,6 @@ export default function PostitBoardPage() {
         </a>
         <div className={styles.headContent}>
           <div>
-            <div className={styles.eyebrow}>
-              <span /> DADOS DEMONSTRATIVOS
-            </div>
             <h1>Quadro semanal de ações</h1>
             <p>
               Organize as ações na janela móvel de acompanhamento.
