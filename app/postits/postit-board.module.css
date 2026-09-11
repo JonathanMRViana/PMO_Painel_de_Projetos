@@ -56,3 +56,11 @@
 .dateAudit ul { margin:8px 0 0; padding-left:18px; }
 .dateAudit li { margin:5px 0; }
 .dateAudit li span { margin-left:6px; color:#87949a; font-size:11px; }
+.projectManager { display:grid; gap:8px; max-height:48vh; overflow:auto; }
+.projectManagerItem { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid #dce3e2; border-radius:8px; padding:9px 10px; color:#40545a; font-size:13px; font-weight:750; }
+.projectManagerItem > span { display:flex; align-items:center; gap:8px; min-width:0; }
+.projectManagerItem i { width:14px; height:14px; flex:0 0 auto; border-radius:3px; }
+.projectManagerItem > div { display:flex; gap:6px; }
+.projectManagerItem button { font-size:11px; }
+.deleteProjectButton, .deleteProjectConfirm { color:#a43636 !important; }
+.deleteProjectConfirm { background:#fff1f1 !important; border:1px solid #e7bcbc !important; }

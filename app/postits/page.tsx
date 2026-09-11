@@ -6,6 +6,8 @@ import {
   CircleAlert,
   GripVertical,
   Plus,
+  Pencil,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react';
@@ -20,6 +22,16 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import styles from './postit-board.module.css';
 type Day = 'seg' | 'ter' | 'qua' | 'qui' | 'sex' | 'd7';
 type Sector = string;
@@ -277,6 +289,9 @@ export default function PostitBoardPage() {
     [catalogName, setCatalogName] = useState(''),
     [catalogColor, setCatalogColor] = useState('#d9c7f3'),
     [editingSector, setEditingSector] = useState<string | null>(null),
+    [editingProject, setEditingProject] = useState<string | null>(null),
+    [managingProjects, setManagingProjects] = useState(false),
+    [deleteProjectPending, setDeleteProjectPending] = useState<string | null>(null),
     [dateHistory, setDateHistory] = useState<DateHistory[]>([]),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
@@ -449,15 +464,23 @@ export default function PostitBoardPage() {
     setError(null);
     try {
       const response = await fetch('/api/postit-catalog', {
-        method: editingSector ? 'PUT' : 'POST',
+        method: editingSector || editingProject ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingSector ? { type: 'sector', oldName: editingSector, name: catalogName } : { type: catalogType, name: catalogName, color: catalogColor }),
+        body: JSON.stringify(editingSector ? { type: 'sector', oldName: editingSector, name: catalogName } : editingProject ? { type: 'project', oldName: editingProject, name: catalogName, color: catalogColor } : { type: catalogType, name: catalogName, color: catalogColor }),
       });
       const data = await response.json() as { item?: { name: string; color?: string }; error?: string };
       if (!response.ok || !data.item) throw new Error(data.error || 'Não foi possível salvar o cadastro.');
       if (editingSector) {
         setSectors((all) => all.map((sector) => sector === editingSector ? data.item!.name : sector));
         setActions((all) => all.map((action) => action.sector === editingSector ? { ...action, sector: data.item!.name } : action));
+      } else if (editingProject) {
+        setProjects((all) => all.map((project) => project === editingProject ? data.item!.name : project));
+        setProjectColors((all) => {
+          const { [editingProject]: _oldColor, ...rest } = all;
+          return { ...rest, [data.item!.name]: data.item!.color || '#d8e5e5' };
+        });
+        setActions((all) => all.map((action) => action.project === editingProject ? { ...action, project: data.item!.name } : action));
+        setSelectedProject((current) => current === editingProject ? data.item!.name : current);
       } else if (catalogType === 'project') {
         setProjects((all) => [...all, data.item!.name]);
         setProjectColors((all) => ({ ...all, [data.item!.name]: data.item!.color || '#d8e5e5' }));
@@ -465,12 +488,38 @@ export default function PostitBoardPage() {
       setCatalogName('');
       setCatalogColor('#d9c7f3');
       setEditingSector(null);
+      setEditingProject(null);
       setCatalogType(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível salvar o cadastro.');
     } finally {
       setSaving(false);
     }
+  }
+  const openProjectEdit = (project: string) => {
+    setCatalogType('project');
+    setEditingProject(project);
+    setEditingSector(null);
+    setCatalogName(project);
+    setCatalogColor(projectColors[project] || '#d8e5e5');
+    setManagingProjects(false);
+  };
+  async function deleteProject(project: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/postit-catalog', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'project', name: project }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || 'Não foi possível excluir o projeto.');
+      setProjects((all) => all.filter((item) => item !== project));
+      setProjectColors((all) => { const { [project]: _removed, ...rest } = all; return rest; });
+      setSelectedProject((current) => current === project ? null : current);
+      setDeleteProjectPending(null);
+      setManagingProjects(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível excluir o projeto.');
+      setDeleteProjectPending(null);
+    } finally { setSaving(false); }
   }
   return (
     <main className={styles.page}>
@@ -500,6 +549,9 @@ export default function PostitBoardPage() {
             </div>
             <Button variant="outline" onClick={() => setCatalogType('project')}>
               <Plus /> Projeto
+            </Button>
+            <Button variant="outline" onClick={() => setManagingProjects(true)}>
+              <Pencil /> Projetos
             </Button>
             <Button variant="outline" onClick={() => setCatalogType('sector')}>
               <Plus /> Setor
@@ -677,7 +729,7 @@ export default function PostitBoardPage() {
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar ação' : 'Nova ação'}</DialogTitle>
             <DialogDescription>
-              O prazo é calculado automaticamente pela posição no quadro.
+              A posição no quadro é calculada automaticamente pela data de conclusão.
             </DialogDescription>
           </DialogHeader>
           <div className={styles.form}>
@@ -765,11 +817,11 @@ export default function PostitBoardPage() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); } }}>
+      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); setEditingProject(null); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{catalogType === 'project' ? 'Novo projeto' : editingSector ? 'Editar setor' : 'Novo setor'}</DialogTitle>
-            <DialogDescription>{catalogType === 'project' ? 'O projeto ficará disponível no quadro e identificado por uma nova cor.' : editingSector ? 'A nova nomenclatura será aplicada aos post-its deste setor.' : 'O setor será adicionado como uma nova linha no quadro semanal.'}</DialogDescription>
+            <DialogTitle>{editingProject ? 'Editar projeto' : catalogType === 'project' ? 'Novo projeto' : editingSector ? 'Editar setor' : 'Novo setor'}</DialogTitle>
+            <DialogDescription>{editingProject ? 'A nomenclatura e a cor serão aplicadas imediatamente a todos os post-its deste projeto.' : catalogType === 'project' ? 'O projeto ficará disponível no quadro e identificado por uma nova cor.' : editingSector ? 'A nova nomenclatura será aplicada aos post-its deste setor.' : 'O setor será adicionado como uma nova linha no quadro semanal.'}</DialogDescription>
           </DialogHeader>
           <div>
             <Label htmlFor="catalog-name">Nome</Label>
@@ -785,10 +837,41 @@ export default function PostitBoardPage() {
           </div>}
           <div className={styles.dialogFooter}>
             <Button variant="outline" onClick={() => setCatalogType(null)}>Cancelar</Button>
-            <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>{editingSector ? 'Salvar setor' : 'Adicionar'}</Button>
+            <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>{editingSector ? 'Salvar setor' : editingProject ? 'Salvar projeto' : 'Adicionar'}</Button>
           </div>
         </DialogContent>
       </Dialog>
+      <Dialog open={managingProjects} onOpenChange={setManagingProjects}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Gerenciar projetos</DialogTitle>
+            <DialogDescription>Edite o nome e a cor, ou exclua projetos sem ações vinculadas.</DialogDescription>
+          </DialogHeader>
+          <div className={styles.projectManager}>
+            {projects.map((project) => (
+              <div key={project} className={styles.projectManagerItem}>
+                <span><i style={{ backgroundColor: projectColors[project] }} /> {project}</span>
+                <div>
+                  <Button variant="outline" size="sm" onClick={() => openProjectEdit(project)}><Pencil /> Editar</Button>
+                  <Button variant="outline" size="sm" className={styles.deleteProjectButton} onClick={() => setDeleteProjectPending(project)}><Trash2 /> Excluir</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={deleteProjectPending !== null} onOpenChange={(open) => !open && setDeleteProjectPending(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
+            <AlertDialogDescription>O projeto será removido da legenda. A exclusão só é permitida quando não houver post-its vinculados a ele.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className={styles.deleteProjectConfirm} disabled={saving} onClick={() => deleteProjectPending && void deleteProject(deleteProjectPending)}>Excluir projeto</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

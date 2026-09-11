@@ -112,22 +112,45 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const body = (await request.json()) as { type?: string; oldName?: string; name?: string };
-    const type = body.type === 'sector' ? body.type : '';
+    const body = (await request.json()) as { type?: string; oldName?: string; name?: string; color?: string };
+    const type = body.type === 'project' || body.type === 'sector' ? body.type : '';
     const oldName = body.oldName?.trim() ?? '';
     const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
     if (!type || !oldName || !name || name.length > 40) throw new Error('Informe um nome de até 40 caracteres.');
     if (name !== oldName) {
       const duplicate = await getDb().prepare('SELECT id FROM postit_board_catalog WHERE type = ? AND lower(name) = lower(?)').bind(type, name).first();
-      if (duplicate) throw new Error('Este setor já existe.');
+      if (duplicate) throw new Error(`Este ${type === 'project' ? 'projeto' : 'setor'} já existe.`);
     }
     const db = getDb();
-    await db.batch([
-      db.prepare('UPDATE postit_board_catalog SET name = ? WHERE type = ? AND name = ?').bind(name, type, oldName),
-      db.prepare('UPDATE postit_actions SET sector = ? WHERE sector = ?').bind(name, oldName),
-    ]);
-    return Response.json({ item: { type, name }, oldName });
+    const color = type === 'project' ? body.color || '#d8e5e5' : null;
+    await db.batch(type === 'project'
+      ? [
+          db.prepare('UPDATE postit_board_catalog SET name = ?, color = ? WHERE type = ? AND name = ?').bind(name, color, type, oldName),
+          db.prepare('UPDATE postit_actions SET project = ? WHERE project = ?').bind(name, oldName),
+        ]
+      : [
+          db.prepare('UPDATE postit_board_catalog SET name = ? WHERE type = ? AND name = ?').bind(name, type, oldName),
+          db.prepare('UPDATE postit_actions SET sector = ? WHERE sector = ?').bind(name, oldName),
+        ]);
+    return Response.json({ item: { type, name, color }, oldName });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar o setor.' }, { status: 400 });
+    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar o cadastro.' }, { status: 400 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as { type?: string; name?: string };
+    const type = body.type === 'project' ? body.type : '';
+    const name = body.name?.trim() ?? '';
+    if (!type || !name) throw new Error('Projeto não informado.');
+    const db = getDb();
+    const linked = await db.prepare('SELECT COUNT(*) AS total FROM postit_actions WHERE project = ?').bind(name).first<{ total: number }>();
+    if (linked?.total) throw new Error(`Não é possível excluir: existem ${linked.total} post-it(s) vinculados a este projeto.`);
+    const result = await db.prepare('DELETE FROM postit_board_catalog WHERE type = ? AND name = ?').bind(type, name).run();
+    if (!result.meta.changes) throw new Error('Projeto não encontrado.');
+    return Response.json({ ok: true });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível excluir o projeto.' }, { status: 400 });
   }
 }
