@@ -277,7 +277,7 @@ async function api(method: 'POST' | 'PUT' | 'DELETE', body: unknown) {
     throw new Error(data.error || 'Não foi possível salvar a alteração.');
   return data;
 }
-export default function PostitBoardPage() {
+export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boolean }) {
   const [actions, setActions] = useState<Action[]>([]),
     [loading, setLoading] = useState(true),
     [saving, setSaving] = useState(false),
@@ -332,6 +332,10 @@ export default function PostitBoardPage() {
             .filter((action, index) => action.date !== data.actions![index].date)
             .map((action) => api('PUT', action)),
         );
+        return;
+      }
+      if (viewOnly) {
+        setActions([]);
         return;
       }
       const saved = await Promise.all(
@@ -550,18 +554,20 @@ export default function PostitBoardPage() {
             <div className={styles.weekBadge}>
               <CalendarDays size={17} /> Janela móvel D+7
             </div>
-            <Button variant="outline" onClick={() => setCatalogType('project')}>
-              <Plus /> Projeto
-            </Button>
-            <Button variant="outline" onClick={() => setManagingProjects(true)}>
-              <Pencil /> Projetos
-            </Button>
-            <Button variant="outline" onClick={() => setCatalogType('sector')}>
-              <Plus /> Setor
-            </Button>
-            <Button className={styles.newButton} onClick={create}>
-              <Plus /> Nova ação
-            </Button>
+            {!viewOnly && <>
+              <Button variant="outline" onClick={() => setCatalogType('project')}>
+                <Plus /> Projeto
+              </Button>
+              <Button variant="outline" onClick={() => setManagingProjects(true)}>
+                <Pencil /> Projetos
+              </Button>
+              <Button variant="outline" onClick={() => setCatalogType('sector')}>
+                <Plus /> Setor
+              </Button>
+              <Button className={styles.newButton} onClick={create}>
+                <Plus /> Nova ação
+              </Button>
+            </>}
           </div>
         </div>
         {error && (
@@ -586,18 +592,18 @@ export default function PostitBoardPage() {
           ))}
           {sectors.map((sector) => (
             <div className={styles.row} key={sector}>
-              <button className={styles.sectorLabel} onClick={() => { setCatalogType('sector'); setEditingSector(sector); setCatalogName(sector); }}> {sector} </button>
+              <button className={styles.sectorLabel} disabled={viewOnly} onClick={() => { if (!viewOnly) { setCatalogType('sector'); setEditingSector(sector); setCatalogName(sector); } }}> {sector} </button>
               {days.map((d) => (
                 <div
                   key={d.id}
                   className={[
                     styles.cell,
-                    dragged ? styles.dropReady : '',
-                    dropTarget === `${sector}-${d.id}` ? styles.dropActive : '',
+                    !viewOnly && dragged ? styles.dropReady : '',
+                    !viewOnly && dropTarget === `${sector}-${d.id}` ? styles.dropActive : '',
                   ].join(' ')}
-                  onDragEnter={() => setDropTarget(`${sector}-${d.id}`)}
-                  onDragOver={(e) => { e.preventDefault(); setDropTarget(`${sector}-${d.id}`); }}
-                  onDrop={(e) => drop(e, d.id, sector)}
+                  onDragEnter={() => !viewOnly && setDropTarget(`${sector}-${d.id}`)}
+                  onDragOver={(e) => { if (!viewOnly) { e.preventDefault(); setDropTarget(`${sector}-${d.id}`); } }}
+                  onDrop={(e) => { if (!viewOnly) drop(e, d.id, sector); }}
                 >
                   {visible
                     .filter((a) => a.sector === sector && boardDay(a.date) === d.id)
@@ -606,13 +612,14 @@ export default function PostitBoardPage() {
                         key={a.id}
                         className={cn(a)}
                         style={{ backgroundColor: projectColors[a.project], color: projectTextColor(projectColors[a.project]) }}
-                        draggable
-                        onDragStart={(e) => drag(e, a.id)}
-                        onDragEnd={() => { setDragged(null); setDropTarget(null); }}
+                        draggable={!viewOnly}
+                        onDragStart={(e) => !viewOnly && drag(e, a.id)}
+                        onDragEnd={() => { if (!viewOnly) { setDragged(null); setDropTarget(null); } }}
                       >
                         <button
                           className={styles.postitBody}
-                          onClick={() => edit(a)}
+                          disabled={viewOnly}
+                          onClick={() => { if (!viewOnly) edit(a); }}
                         >
                           <span className={styles.postitTop}>
                             <GripVertical size={14} />
@@ -632,13 +639,13 @@ export default function PostitBoardPage() {
                             {a.criticality}
                           </span>
                         </button>
-                        <button
+                        {!viewOnly && <button
                           className={styles.completeButton}
                           disabled={saving}
                           onClick={() => void complete(a)}
                         >
                           {a.completed ? 'Reabrir' : 'Concluir'}
-                        </button>
+                        </button>}
                       </article>
                     ))}
                 </div>
@@ -719,7 +726,7 @@ export default function PostitBoardPage() {
           </ul>
         </div>
       </section>
-      <Dialog
+      {!viewOnly && <Dialog
         open={creating || editing !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -819,8 +826,8 @@ export default function PostitBoardPage() {
             </button>
           )}
         </DialogContent>
-      </Dialog>
-      <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); setEditingProject(null); } }}>
+      </Dialog>}
+      {!viewOnly && <Dialog open={catalogType !== null} onOpenChange={(open) => { if (!open) { setCatalogType(null); setCatalogName(''); setCatalogColor('#d9c7f3'); setEditingSector(null); setEditingProject(null); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>{editingProject ? 'Editar projeto' : catalogType === 'project' ? 'Novo projeto' : editingSector ? 'Editar setor' : 'Novo setor'}</DialogTitle>
@@ -843,8 +850,8 @@ export default function PostitBoardPage() {
             <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>{editingSector ? 'Salvar setor' : editingProject ? 'Salvar projeto' : 'Adicionar'}</Button>
           </div>
         </DialogContent>
-      </Dialog>
-      <Dialog open={managingProjects} onOpenChange={setManagingProjects}>
+      </Dialog>}
+      {!viewOnly && <Dialog open={managingProjects} onOpenChange={setManagingProjects}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Gerenciar projetos</DialogTitle>
@@ -862,8 +869,8 @@ export default function PostitBoardPage() {
             ))}
           </div>
         </DialogContent>
-      </Dialog>
-      <AlertDialog open={deleteProjectPending !== null} onOpenChange={(open) => !open && setDeleteProjectPending(null)}>
+      </Dialog>}
+      {!viewOnly && <AlertDialog open={deleteProjectPending !== null} onOpenChange={(open) => !open && setDeleteProjectPending(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
@@ -874,7 +881,7 @@ export default function PostitBoardPage() {
             <AlertDialogAction className={styles.deleteProjectConfirm} disabled={saving} onClick={() => deleteProjectPending && void deleteProject(deleteProjectPending)}>Excluir projeto</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
     </main>
   );
 }
