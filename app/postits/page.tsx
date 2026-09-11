@@ -86,10 +86,14 @@ const projectTextColor = (color?: string) => {
   const [r, g, b] = [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6)].map((value) => Number.parseInt(value, 16));
   return (r * 299 + g * 587 + b * 114) / 1000 < 145 ? '#ffffff' : '#263036';
 };
-const projectColor = (project: string, colors: Record<string, string>) => {
+const projectIdentity = (project: string) => {
   const normalized = project.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return ['alpek', 'alppex', 'alpex'].includes(normalized) ? 'alpek' : normalized;
+};
+const projectColor = (project: string, colors: Record<string, string>) => {
+  const normalized = projectIdentity(project);
   const exactOrEquivalent = colors[project] || Object.entries(colors).find(([name]) =>
-    name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase() === normalized,
+    projectIdentity(name) === normalized,
   )?.[1];
   if (exactOrEquivalent) return exactOrEquivalent;
   if (normalized === 'alpek') return '#f3a3b3';
@@ -393,7 +397,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   const visible = actions.filter(
     (a) =>
       (showCompleted || !a.completed) &&
-      (!selectedProject || a.project === selectedProject),
+      (!selectedProject || projectIdentity(a.project) === projectIdentity(selectedProject)),
   );
   const counters = useMemo(
     () =>
