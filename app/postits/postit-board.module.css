@@ -68,3 +68,12 @@
 .deleteProjectButton, .deleteProjectConfirm { color:#a43636 !important; }
 .deleteProjectConfirm { background:#fff1f1 !important; border:1px solid #e7bcbc !important; }
 .loginError { margin:8px 0 0; color:#a43636; font-size:12px; }
+.searchBox { display:flex; align-items:center; gap:7px; width:260px; border:1px solid #dce2e4; border-radius:9px; padding:0 9px; background:#fff; color:#6c7d84; }
+.searchBox input { height:36px; border:0; box-shadow:none; padding:0; font-size:12px; }
+.searchBox input:focus-visible { outline:0; }
+.postitPreview { position:absolute; z-index:60; top:calc(100% + 7px); left:0; display:grid; gap:4px; width:min(270px, calc(100vw - 36px)); border:1px solid #c8d7d5; border-radius:8px; padding:10px 11px; background:#143f46; color:#fff; box-shadow:0 10px 22px #143f4650; font-size:11px; line-height:1.35; opacity:0; pointer-events:none; transform:translateY(-4px); transition:opacity .15s, transform .15s; }
+.postit:hover .postitPreview, .postit:focus-within .postitPreview { opacity:1; transform:translateY(0); }
+.postitPreview b { font-size:12px; }.postitPreview span { display:flex; align-items:center; gap:5px; color:#d8eeee; }.postitPreview p { margin:3px 0 0; color:#fff; }
+.projectBuffer { display:grid; gap:7px; margin-top:12px; }.projectBuffer > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; align-items:center; color:#596970; font-size:10px; }.projectBuffer span { display:flex; min-width:0; align-items:center; gap:5px; overflow:hidden; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }.projectBuffer span > i { width:9px; height:9px; flex:0 0 auto; border-radius:2px; }.projectBuffer b { color:#0d5963; }.projectBuffer em { grid-column:1 / -1; height:4px; overflow:hidden; border-radius:99px; background:#e4eded; }.projectBuffer em i { display:block; height:100%; border-radius:inherit; background:#3f9985; }
+.viewerDetails { display:grid; gap:10px; color:#53636b; font-size:13px; }.viewerDetails p { margin:0 0 4px; color:#26343b; line-height:1.5; }.viewerDetails span { display:flex; align-items:center; gap:5px; }.viewerDetails b { color:#26343b; }
+@media (max-width:800px) { .searchBox { width:100%; order:-1; }.headerActions { flex-wrap:wrap; } }

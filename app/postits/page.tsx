@@ -7,6 +7,7 @@ import {
   GripVertical,
   Plus,
   Pencil,
+  Search,
   Trash2,
   UserRound,
   X,
@@ -302,6 +303,8 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [editing, setEditing] = useState<Action | null>(null),
     [creating, setCreating] = useState(false),
     [showCompleted, setShowCompleted] = useState(false),
+    [query, setQuery] = useState(''),
+    [viewing, setViewing] = useState<Action | null>(null),
     [projects, setProjects] = useState<Project[]>(defaultProjects),
     [sectors, setSectors] = useState<Sector[]>(defaultSectors),
     [projectColors, setProjectColors] = useState<Record<string, string>>({}),
@@ -398,7 +401,9 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   const visible = actions.filter(
     (a) =>
       (showCompleted || !a.completed) &&
-      (!selectedProject || projectIdentity(a.project) === projectIdentity(selectedProject)),
+      (!selectedProject || projectIdentity(a.project) === projectIdentity(selectedProject)) &&
+      (!query.trim() || [a.title, a.observation, a.owner, a.sector, a.project, a.criticality]
+        .some((value) => value.toLocaleLowerCase('pt-BR').includes(query.trim().toLocaleLowerCase('pt-BR')))),
   );
   const counters = useMemo(
     () =>
@@ -415,6 +420,14 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     ])),
     [actions, projects],
   );
+  const projectBuffers = useMemo(() => {
+    const openCounts = projects.map((project) => ({
+      project,
+      count: actions.filter((action) => !action.completed && projectIdentity(action.project) === projectIdentity(project)).length,
+    })).filter((item) => item.count > 0);
+    const max = Math.max(...openCounts.map((item) => item.count), 1);
+    return openCounts.map((item) => ({ ...item, percent: Math.round((item.count / max) * 100) }));
+  }, [actions, projects]);
   const attention = actions
     .filter(
       (a) => !a.completed && (state(a) === 'Crítico' || state(a) === 'Atenção'),
@@ -596,6 +609,10 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
             </p>
           </div>
           <div className={styles.headerActions}>
+            <div className={styles.searchBox}>
+              <Search size={15} />
+              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar ação ou responsável" aria-label="Pesquisar post-its" />
+            </div>
             <Button
               variant="outline"
               onClick={() => setShowCompleted((v) => !v)}
@@ -670,8 +687,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                       >
                         <button
                           className={styles.postitBody}
-                          disabled={!canEdit}
-                          onClick={() => { if (canEdit) edit(a); }}
+                          onClick={() => { if (viewOnly) setViewing(a); else if (canEdit) edit(a); }}
                         >
                           <span className={styles.postitTop}>
                             <GripVertical size={14} />
@@ -691,6 +707,13 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                             {a.criticality}
                           </span>
                         </button>
+                        <div className={styles.postitPreview}>
+                          <b>{a.title}</b>
+                          <span>{a.project} · {a.sector}</span>
+                          <span>Conclusão: {formatDate(a.date)}</span>
+                          <span><UserRound size={12} /> {a.owner}</span>
+                          {a.observation && <p>{a.observation}</p>}
+                        </div>
                         {canEdit && <button
                           className={styles.completeButton}
                           disabled={saving}
@@ -747,18 +770,19 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
         </div>
         <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
-            <CheckCircle2 size={16} /> Buffer da semana
+            <CheckCircle2 size={16} /> Buffer por projeto
           </div>
-          <div className={styles.buffer}>
-            <span>Capacidade comprometida</span>
-            <strong>72%</strong>
-            <div>
-              <i />
-            </div>
+          <div className={styles.projectBuffer}>
+            {projectBuffers.slice(0, 4).map((item) => (
+              <div key={item.project}>
+                <span><i style={{ backgroundColor: projectColor(item.project, projectColors) }} /> {item.project}</span>
+                <b>{item.count}</b>
+                <em><i style={{ width: `${item.percent}%` }} /></em>
+              </div>
+            ))}
           </div>
           <p>
-            {actions.filter((a) => !a.completed).length} ações ativas · margem
-            operacional de 28%.
+            {actions.filter((a) => !a.completed).length} ações abertas no total.
           </p>
         </div>
         <div className={[styles.controlCard, styles.attentionCard].join(' ')}>
@@ -934,6 +958,23 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>}
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          {viewing && <>
+            <DialogHeader>
+              <DialogTitle>{viewing.title}</DialogTitle>
+              <DialogDescription>{viewing.project} · {viewing.sector}</DialogDescription>
+            </DialogHeader>
+            <div className={styles.viewerDetails}>
+              <p>{viewing.observation || 'Sem observação registrada.'}</p>
+              <span><UserRound size={14} /> Responsável: <b>{viewing.owner}</b></span>
+              <span>Data de conclusão: <b>{formatDate(viewing.date)}</b></span>
+              <span>Criticidade: <b>{viewing.criticality}</b></span>
+              <span>Status: <b>{state(viewing)}</b></span>
+            </div>
+          </>}
+        </DialogContent>
+      </Dialog>
       <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
         <DialogContent className="sm:max-w-[380px]">
           <DialogHeader>
