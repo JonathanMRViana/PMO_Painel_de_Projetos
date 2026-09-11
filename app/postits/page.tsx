@@ -37,7 +37,9 @@ type Action = {
   project: Project;
   criticality: Criticality;
   completed: boolean;
+  createdAt?: string;
 };
+type DateHistory = { id: string; previousDate: string; newDate: string; changedAt: string };
 const days: { id: Day; label: string }[] = [
   { id: 'seg', label: 'Segunda' },
   { id: 'ter', label: 'Terça' },
@@ -207,6 +209,24 @@ function boardDay(dateValue: string): Day {
   if (distance < 0 || distance > 6) return 'd7';
   return ({ 1: 'seg', 2: 'ter', 3: 'qua', 4: 'qui', 5: 'sex' }[due.getDay()] as Day | undefined) || 'd7';
 }
+const formatDate = (value?: string) => {
+  if (!value) return 'Não registrada';
+  const normalized = value.includes('T')
+    ? value
+    : value.includes(' ')
+      ? value.replace(' ', 'T')
+      : `${value}T00:00:00`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? 'Não registrada' : new Intl.DateTimeFormat('pt-BR').format(date);
+};
+const openDuration = (createdAt?: string, completed?: boolean) => {
+  if (!createdAt) return 'Não disponível';
+  const normalized = createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T');
+  const timestamp = new Date(normalized).getTime();
+  if (Number.isNaN(timestamp)) return 'Não disponível';
+  const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86400000));
+  return completed ? `${days} dia(s) até a conclusão` : `${days} dia(s) em aberto`;
+};
 const dayDiff = (v: string) =>
   Math.ceil(
     (new Date(v + 'T00:00:00').getTime() -
@@ -257,6 +277,7 @@ export default function PostitBoardPage() {
     [catalogName, setCatalogName] = useState(''),
     [catalogColor, setCatalogColor] = useState('#d9c7f3'),
     [editingSector, setEditingSector] = useState<string | null>(null),
+    [dateHistory, setDateHistory] = useState<DateHistory[]>([]),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
     void load();
@@ -327,6 +348,11 @@ export default function PostitBoardPage() {
     const { id, ...rest } = a;
     setForm(rest);
     setEditing(a);
+    setDateHistory([]);
+    void fetch(`/api/postit-actions?history=${encodeURIComponent(a.id)}`)
+      .then((response) => response.json())
+      .then((data: { history?: DateHistory[] }) => setDateHistory(data.history || []))
+      .catch(() => undefined);
   };
   const create = () => {
     const draft = empty();
@@ -339,8 +365,8 @@ export default function PostitBoardPage() {
     setError(null);
     try {
       const action = editing
-        ? { ...form, id: editing.id }
-        : { ...form, id: crypto.randomUUID() };
+        ? { ...form, id: editing.id, day: boardDay(form.date) }
+        : { ...form, id: crypto.randomUUID(), day: boardDay(form.date), createdAt: new Date().toISOString() };
       const out = await api(editing ? 'PUT' : 'POST', action);
       setActions((all) =>
         editing
@@ -687,12 +713,10 @@ export default function PostitBoardPage() {
               options={sectors}
               set={(v) => setForm({ ...form, sector: v as Sector })}
             />
-            <Field
-              label="Dia no quadro"
-              value={form.day}
-              options={days.map((d) => ({ value: d.id, label: d.label }))}
-              set={(v) => setForm({ ...form, day: v as Day, date: dateForDay(v as Day, form.day) })}
-            />
+            <div>
+              <Label htmlFor="completion-date">Data de conclusão</Label>
+              <Input id="completion-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value, day: boardDay(e.target.value) })} />
+            </div>
             <Field
               label="Projeto"
               value={form.project}
@@ -724,6 +748,12 @@ export default function PostitBoardPage() {
               {saving ? 'Salvando…' : 'Salvar ação'}
             </Button>
           </div>
+          {editing && <div className={styles.dateAudit}>
+            <p><strong>Data de inclusão:</strong> {formatDate(editing.createdAt)}</p>
+            <p><strong>Tempo em aberto:</strong> {openDuration(editing.createdAt, editing.completed)}</p>
+            <strong>Histórico de reprogramações</strong>
+            {dateHistory.length ? <ul>{dateHistory.map((entry) => <li key={entry.id}>{formatDate(entry.previousDate)} → {formatDate(entry.newDate)} <span>{formatDate(entry.changedAt)}</span></li>)}</ul> : <p>Nenhuma reprogramação registrada.</p>}
+          </div>}
           {editing && (
             <button
               className={styles.deleteAction}

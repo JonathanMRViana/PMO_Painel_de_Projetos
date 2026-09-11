@@ -37,3 +37,15 @@ export const postitBoardCatalog = sqliteTable(
     index('idx_postit_board_catalog_type_name').on(table.type, table.name),
   ],
 );
+
+export const postitActionDateHistory = sqliteTable(
+  'postit_action_date_history',
+  {
+    id: text('id').primaryKey(),
+    actionId: text('action_id').notNull(),
+    previousDate: text('previous_date').notNull(),
+    newDate: text('new_date').notNull(),
+    changedAt: text('changed_at').notNull().default('CURRENT_TIMESTAMP'),
+  },
+  (table) => [index('idx_postit_action_date_history_action_changed').on(table.actionId, table.changedAt)],
+);
