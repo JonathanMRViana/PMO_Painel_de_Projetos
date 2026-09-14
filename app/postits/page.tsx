@@ -55,6 +55,7 @@ type Action = {
   createdAt?: string;
 };
 type DateHistory = { id: string; previousDate: string; newDate: string; changedAt: string };
+type HoveredAction = { action: Action; x: number; y: number };
 const days: { id: Day; label: string }[] = [
   { id: 'seg', label: 'Segunda' },
   { id: 'ter', label: 'Terça' },
@@ -307,6 +308,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [showCompleted, setShowCompleted] = useState(false),
     [query, setQuery] = useState(''),
     [viewing, setViewing] = useState<Action | null>(null),
+    [hovered, setHovered] = useState<HoveredAction | null>(null),
     [projects, setProjects] = useState<Project[]>(defaultProjects),
     [sectors, setSectors] = useState<Sector[]>(defaultSectors),
     [projectColors, setProjectColors] = useState<Record<string, string>>({}),
@@ -750,6 +752,9 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                         draggable={canEdit}
                         onDragStart={(e) => canEdit && drag(e, a.id)}
                         onDragEnd={() => { if (canEdit) { setDragged(null); setDropTarget(null); } }}
+                        onMouseEnter={(event) => setHovered({ action: a, x: event.clientX, y: event.clientY })}
+                        onMouseMove={(event) => setHovered({ action: a, x: event.clientX, y: event.clientY })}
+                        onMouseLeave={() => setHovered(null)}
                       >
                         <button
                           className={styles.postitBody}
@@ -773,13 +778,6 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                             {a.criticality}
                           </span>
                         </button>
-                        <div className={styles.postitPreview}>
-                          <b>{a.title}</b>
-                          <span>{a.project} · {a.sector}</span>
-                          <span>Conclusão: {formatDate(a.date)}</span>
-                          <span><UserRound size={12} /> {a.owner}</span>
-                          {a.observation && <p>{a.observation}</p>}
-                        </div>
                         {canEdit && <button
                           className={styles.completeButton}
                           disabled={saving}
@@ -798,6 +796,20 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           <div className={styles.loadingBoard}>Carregando ações…</div>
         )}
       </section>
+      {hovered && <aside
+        className={styles.postitPreview}
+        aria-hidden="true"
+        style={{
+          left: Math.min(hovered.x + 16, Math.max(12, window.innerWidth - 292)),
+          top: Math.min(hovered.y + 16, Math.max(12, window.innerHeight - 210)),
+        }}
+      >
+        <b>{hovered.action.title}</b>
+        <span>{hovered.action.project} · {hovered.action.sector}</span>
+        <span>Conclusão: {formatDate(hovered.action.date)}</span>
+        <span><UserRound size={12} /> {hovered.action.owner}</span>
+        <p>{hovered.action.observation || 'Sem observação registrada.'}</p>
+      </aside>}
       <section className={styles.footerGrid}>
         <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
