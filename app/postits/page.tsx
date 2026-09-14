@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
-  CalendarDays,
   CheckCircle2,
   CircleAlert,
   Copy,
@@ -679,9 +678,6 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
             {canEdit && <Button variant="outline" onClick={() => setReportOpen(true)}>
               <FileText /> Relatório de pendências
             </Button>}
-            <div className={styles.weekBadge}>
-              <CalendarDays size={17} /> Janela móvel D+7
-            </div>
             {canEdit && <>
               <Button variant="outline" onClick={() => setCatalogType('project')}>
                 <Plus /> Projeto
