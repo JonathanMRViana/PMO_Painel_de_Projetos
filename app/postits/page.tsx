@@ -428,14 +428,6 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     ])),
     [actions, projects],
   );
-  const projectBuffers = useMemo(() => {
-    const openCounts = projects.map((project) => ({
-      project,
-      count: actions.filter((action) => !action.completed && projectIdentity(action.project) === projectIdentity(project)).length,
-    })).filter((item) => item.count > 0);
-    const max = Math.max(...openCounts.map((item) => item.count), 1);
-    return openCounts.map((item) => ({ ...item, percent: Math.round((item.count / max) * 100) }));
-  }, [actions, projects]);
   const reportActions = useMemo(
     () => actions
       .filter((action) =>
@@ -850,18 +842,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           <div className={styles.cardTitle}>
             <CheckCircle2 size={16} /> Buffer por projeto
           </div>
-          <div className={styles.projectBuffer}>
-            {projectBuffers.slice(0, 4).map((item) => (
-              <div key={item.project}>
-                <span><i style={{ backgroundColor: projectColor(item.project, projectColors) }} /> {item.project}</span>
-                <b>{item.count}</b>
-                <em><i style={{ width: `${item.percent}%` }} /></em>
-              </div>
-            ))}
-          </div>
-          <p>
-            {actions.filter((a) => !a.completed).length} ações abertas no total.
-          </p>
+          <p>—</p>
         </div>
         <div className={[styles.controlCard, styles.attentionCard].join(' ')}>
           <div className={styles.cardTitle}>
