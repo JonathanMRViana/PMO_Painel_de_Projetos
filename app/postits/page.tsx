@@ -416,7 +416,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   const projectActionCounts = useMemo(
     () => Object.fromEntries(projects.map((project) => [
       project,
-      actions.filter((action) => projectIdentity(action.project) === projectIdentity(project)).length,
+      actions.filter((action) => !action.completed && projectIdentity(action.project) === projectIdentity(project)).length,
     ])),
     [actions, projects],
   );
@@ -750,7 +750,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               </button>
             ))}
           </div>
-          <p>{selectedProject ? `Exibindo ${selectedProject}. Clique novamente para ver todos.` : 'Clique em um projeto para filtrar o quadro.'}</p>
+          <p>{selectedProject ? `Exibindo ${selectedProject}. Clique novamente para ver todos.` : 'Clique em um projeto para filtrar o quadro. O número indica ações abertas.'}</p>
         </div>
         <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
