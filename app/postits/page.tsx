@@ -676,9 +676,9 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
             >
               {showCompleted ? 'Ocultar concluídos' : 'Visualizar concluídos'}
             </Button>
-            <Button variant="outline" onClick={() => setReportOpen(true)}>
+            {canEdit && <Button variant="outline" onClick={() => setReportOpen(true)}>
               <FileText /> Relatório de pendências
-            </Button>
+            </Button>}
             <div className={styles.weekBadge}>
               <CalendarDays size={17} /> Janela móvel D+7
             </div>
@@ -1034,7 +1034,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </>}
         </DialogContent>
       </Dialog>
-      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+      {canEdit && <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent className="sm:max-w-[820px]">
           <DialogHeader>
             <DialogTitle>Relatório de pendências</DialogTitle>
@@ -1096,7 +1096,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
             </Button>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
       <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
         <DialogContent className="sm:max-w-[380px]">
           <DialogHeader>
