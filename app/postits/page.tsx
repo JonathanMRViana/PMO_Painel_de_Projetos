@@ -4,6 +4,8 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleAlert,
+  Copy,
+  FileText,
   GripVertical,
   Plus,
   Pencil,
@@ -322,6 +324,10 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [password, setPassword] = useState(''),
     [loginError, setLoginError] = useState<string | null>(null),
     [dateHistory, setDateHistory] = useState<DateHistory[]>([]),
+    [reportOpen, setReportOpen] = useState(false),
+    [reportProject, setReportProject] = useState('__all'),
+    [reportSector, setReportSector] = useState('__all'),
+    [reportCopied, setReportCopied] = useState(false),
     [form, setForm] = useState<Omit<Action, 'id'>>(empty());
   useEffect(() => {
     if (viewOnly) return;
@@ -428,6 +434,63 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     const max = Math.max(...openCounts.map((item) => item.count), 1);
     return openCounts.map((item) => ({ ...item, percent: Math.round((item.count / max) * 100) }));
   }, [actions, projects]);
+  const reportActions = useMemo(
+    () => actions
+      .filter((action) =>
+        !action.completed &&
+        (reportProject === '__all' || projectIdentity(action.project) === projectIdentity(reportProject)) &&
+        (reportSector === '__all' || action.sector === reportSector),
+      )
+      .sort((a, b) => {
+        const criticalityOrder = criticalities.indexOf(b.criticality) - criticalities.indexOf(a.criticality);
+        return criticalityOrder || a.date.localeCompare(b.date) || a.title.localeCompare(b.title);
+      }),
+    [actions, reportProject, reportSector],
+  );
+  const reportGroups = useMemo(() => {
+    const grouped = new Map<string, Map<string, Action[]>>();
+    reportActions.forEach((action) => {
+      const sectorGroups = grouped.get(action.project) || new Map<string, Action[]>();
+      sectorGroups.set(action.sector, [...(sectorGroups.get(action.sector) || []), action]);
+      grouped.set(action.project, sectorGroups);
+    });
+    return [...grouped.entries()];
+  }, [reportActions]);
+  const reportSummary = useMemo(() => ({
+    critical: reportActions.filter((action) => action.criticality === 'Crítico').length,
+    attention: reportActions.filter((action) => state(action) === 'Crítico' || state(action) === 'Atenção').length,
+    sectors: new Set(reportActions.map((action) => action.sector)).size,
+  }), [reportActions]);
+  const reportText = useMemo(() => {
+    const header = [
+      'RELATÓRIO DE PENDÊNCIAS | PMO MAKRO',
+      `Gerado em: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date())}`,
+      `Filtros: Projeto ${reportProject === '__all' ? 'Todos' : reportProject} | Setor ${reportSector === '__all' ? 'Todos' : reportSector}`,
+      `Resumo: ${reportActions.length} pendência(s) aberta(s) | ${reportSummary.critical} crítica(s) | ${reportSummary.attention} com atenção por prazo`,
+    ];
+    const groups = reportGroups.flatMap(([project, sectorGroups]) => [
+      `\nPROJETO: ${project}`,
+      ...[...sectorGroups.entries()].flatMap(([sector, items]) => [
+        `  SETOR: ${sector}`,
+        ...items.map((action) => [
+          `  • ${action.title}`,
+          `    Prazo: ${formatDate(action.date)} | Criticidade: ${action.criticality} | Status: ${state(action)}`,
+          `    Responsável: ${action.owner} | Tempo em aberto: ${openDuration(action.createdAt, action.completed)}`,
+          `    Observação: ${action.observation || 'Sem observação registrada.'}`,
+        ].join('\n')),
+      ]),
+    ]);
+    return [...header, ...groups].join('\n');
+  }, [reportActions, reportGroups, reportProject, reportSector, reportSummary]);
+  async function copyReport() {
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setReportCopied(true);
+      window.setTimeout(() => setReportCopied(false), 2200);
+    } catch {
+      setError('Não foi possível copiar o relatório. Tente novamente.');
+    }
+  }
   const attention = actions
     .filter(
       (a) => !a.completed && (state(a) === 'Crítico' || state(a) === 'Atenção'),
@@ -618,6 +681,9 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               onClick={() => setShowCompleted((v) => !v)}
             >
               {showCompleted ? 'Ocultar concluídos' : 'Visualizar concluídos'}
+            </Button>
+            <Button variant="outline" onClick={() => setReportOpen(true)}>
+              <FileText /> Relatório de pendências
             </Button>
             <div className={styles.weekBadge}>
               <CalendarDays size={17} /> Janela móvel D+7
@@ -973,6 +1039,69 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               <span>Status: <b>{state(viewing)}</b></span>
             </div>
           </>}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="sm:max-w-[820px]">
+          <DialogHeader>
+            <DialogTitle>Relatório de pendências</DialogTitle>
+            <DialogDescription>Resumo das ações abertas, organizado por projeto e setor, pronto para compartilhar.</DialogDescription>
+          </DialogHeader>
+          <div className={styles.reportFilters}>
+            <div>
+              <Label htmlFor="report-project">Projeto</Label>
+              <select id="report-project" className={styles.select} value={reportProject} onChange={(event) => setReportProject(event.target.value)}>
+                <option value="__all">Todos os projetos</option>
+                {projects.map((project) => <option key={project} value={project}>{project}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="report-sector">Setor</Label>
+              <select id="report-sector" className={styles.select} value={reportSector} onChange={(event) => setReportSector(event.target.value)}>
+                <option value="__all">Todos os setores</option>
+                {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className={styles.reportSummary}>
+            <span><b>{reportActions.length}</b> pendências abertas</span>
+            <span><b>{reportSummary.critical}</b> críticas</span>
+            <span><b>{reportSummary.attention}</b> com atenção por prazo</span>
+            <span><b>{reportSummary.sectors}</b> setores envolvidos</span>
+          </div>
+          <div className={styles.reportBody}>
+            {reportGroups.length === 0 ? <p className={styles.reportEmpty}>Não há pendências abertas para os filtros selecionados.</p> : reportGroups.map(([project, sectorGroups]) => (
+              <section key={project} className={styles.reportProject}>
+                <h3><i style={{ backgroundColor: projectColor(project, projectColors) }} /> {project}</h3>
+                {[...sectorGroups.entries()].map(([sector, items]) => (
+                  <div key={sector} className={styles.reportSector}>
+                    <h4>{sector}</h4>
+                    {items.map((action) => (
+                      <article key={action.id} className={styles.reportAction}>
+                        <div className={styles.reportActionHead}>
+                          <strong>{action.title}</strong>
+                          <span className={styles['criticality' + action.criticality.replace('é', 'e').replace('í', 'i')]}> {action.criticality} </span>
+                        </div>
+                        <p>{action.observation || 'Sem observação registrada.'}</p>
+                        <div className={styles.reportMeta}>
+                          <span>Responsável: <b>{action.owner}</b></span>
+                          <span>Conclusão: <b>{formatDate(action.date)}</b></span>
+                          <span>Status: <b>{state(action)}</b></span>
+                          <span>{openDuration(action.createdAt, action.completed)}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ))}
+              </section>
+            ))}
+          </div>
+          <div className={styles.dialogFooter}>
+            <Button variant="outline" onClick={() => setReportOpen(false)}>Fechar</Button>
+            <Button className={styles.newButton} disabled={reportActions.length === 0} onClick={() => void copyReport()}>
+              <Copy size={15} /> {reportCopied ? 'Relatório copiado' : 'Copiar relatório'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
