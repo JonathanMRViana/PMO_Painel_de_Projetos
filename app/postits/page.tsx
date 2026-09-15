@@ -373,14 +373,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
         );
         return;
       }
-      if (viewOnly || !canEdit) {
-        setActions([]);
-        return;
-      }
-      const saved = await Promise.all(
-        seed.map((a) => api('POST', a).then((x) => x.action as Action)),
-      );
-      setActions(saved);
+      setActions([]);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Não foi possível carregar o quadro.',
