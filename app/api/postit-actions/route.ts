@@ -158,7 +158,16 @@ export async function DELETE(request: Request) {
   try {
     const denied = await requireEditor(request);
     if (denied) return denied;
-    const { id } = (await request.json()) as { id?: string };
+    const { id, all } = (await request.json()) as { id?: string; all?: boolean };
+    if (all) {
+      const db = getDb();
+      const total = await db.prepare('SELECT COUNT(*) AS total FROM postit_actions').first<{ total: number }>();
+      await db.batch([
+        db.prepare('DELETE FROM postit_action_date_history'),
+        db.prepare('DELETE FROM postit_actions'),
+      ]);
+      return Response.json({ ok: true, deleted: total?.total ?? 0 });
+    }
     if (!id)
       return Response.json({ error: 'Ação não informada.' }, { status: 400 });
     await getDb()
