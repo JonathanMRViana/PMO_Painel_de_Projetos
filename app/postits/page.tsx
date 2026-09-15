@@ -651,9 +651,6 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        {!viewOnly && <a className={styles.backLink} href="/">
-          ← Cockpit PMO
-        </a>}
         <div className={styles.headContent}>
           <div>
             <h1>Quadro semanal de ações</h1>
