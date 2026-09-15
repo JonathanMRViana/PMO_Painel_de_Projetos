@@ -494,7 +494,11 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   };
   const create = () => {
     const draft = empty();
-    setForm({ ...draft, date: dateForDay(draft.day) });
+    setForm({
+      ...draft,
+      project: selectedProject || draft.project,
+      date: dateForDay(draft.day),
+    });
     setCreating(true);
   };
   async function save() {
