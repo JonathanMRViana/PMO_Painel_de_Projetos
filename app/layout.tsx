@@ -10,11 +10,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://pmo-makro-cockpit.finfred-6125.chatgpt.site'),
-  title: 'Quadro de Ações | PMO Makro',
-  description: 'Acompanhamento de ações do PMO Makro.',
+  title: 'Cockpit do Portfólio | PMO Makro',
+  description:
+    'Ferramentas de acompanhamento e gestão de projetos do PMO Makro.',
   openGraph: {
-    title: 'Quadro de Ações | PMO Makro',
-    description: 'Acompanhamento de ações do PMO Makro.',
+    title: 'Cockpit do Portfólio | PMO Makro',
+    description:
+      'Ferramentas de acompanhamento e gestão de projetos do PMO Makro.',
     images: [
       {
         url: '/og.png',
@@ -26,8 +28,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Quadro de Ações | PMO Makro',
-    description: 'Acompanhamento de ações do PMO Makro.',
+    title: 'Cockpit do Portfólio | PMO Makro',
+    description:
+      'Ferramentas de acompanhamento e gestão de projetos do PMO Makro.',
     images: ['/og.png'],
   },
 };
