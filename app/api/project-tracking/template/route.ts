@@ -11,6 +11,7 @@ type Payload = {
   title?: string;
   owner?: string;
   durationDays?: number;
+  predecessorId?: string | null;
   kind?: string;
 };
 
@@ -23,6 +24,7 @@ function clean(payload: Payload) {
     title: payload.title?.trim() ?? '',
     owner: payload.owner?.trim() ?? '',
     durationDays: Math.max(0, Math.round(Number(payload.durationDays ?? 1))),
+    predecessorId: payload.predecessorId?.trim() || null,
     kind: payload.kind?.trim() ?? 'task',
   };
   if (
@@ -94,7 +96,7 @@ export async function POST(request: Request) {
     statements.push(
       db
         .prepare(
-          'INSERT INTO project_tracking_template_tasks (id, parent_id, pillar, item, title, owner, duration_days, kind, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+          'INSERT INTO project_tracking_template_tasks (id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, kind, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
         )
         .bind(
           id,
@@ -104,6 +106,7 @@ export async function POST(request: Request) {
           task.title,
           task.owner,
           task.kind === 'group' ? 0 : task.durationDays,
+          task.predecessorId,
           task.kind,
           nextOrder,
         ),
@@ -135,13 +138,14 @@ export async function PUT(request: Request) {
     const result = await db.batch([
       db
         .prepare(
-          'UPDATE project_tracking_template_tasks SET item = ?, title = ?, owner = ?, duration_days = ?, kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          'UPDATE project_tracking_template_tasks SET item = ?, title = ?, owner = ?, duration_days = ?, predecessor_id = ?, kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         )
         .bind(
           task.item,
           task.title,
           task.owner,
           task.kind === 'group' ? 0 : task.durationDays,
+          task.predecessorId,
           task.kind,
           task.id,
         ),

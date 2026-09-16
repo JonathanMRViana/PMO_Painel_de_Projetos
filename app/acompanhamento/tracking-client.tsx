@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  BarChart3,
   Building2,
   ChevronRight,
   CircleDot,
@@ -12,7 +13,9 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Save,
   Settings2,
+  Table2,
   Trash2,
   Truck,
 } from 'lucide-react';
@@ -38,6 +41,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 type Pillar = 'Empresa' | 'Pessoas' | 'Equipamentos';
+type TaskKind = 'group' | 'task' | 'milestone';
 type Task = {
   id: string;
   parentId: string | null;
@@ -46,26 +50,29 @@ type Task = {
   title: string;
   owner: string;
   durationDays: number;
-  kind: 'group' | 'task' | 'milestone';
+  predecessorId: string | null;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  status: string;
+  observation: string;
+  kind: TaskKind;
   sortOrder: number;
 };
 type Project = {
   id: string;
   name: string;
   templateRevision: number;
+  startDate: string;
+  updatedAt: string;
   createdAt: string;
 };
-type TaskDraft = {
-  id: string;
-  parentId: string;
-  pillar: Pillar;
-  item: string;
-  title: string;
-  owner: string;
-  durationDays: number;
-  kind: Task['kind'];
-};
+type TaskDraft = Pick<
+  Task,
+  'id' | 'pillar' | 'item' | 'title' | 'owner' | 'durationDays' | 'kind'
+> & { parentId: string; predecessorId: string };
 
+const statuses = ['Não iniciado', 'Em andamento', 'Concluído', 'Bloqueado'];
 const pillarMeta: Record<
   Pillar,
   { icon: typeof Building2; accent: string; soft: string }
@@ -77,6 +84,7 @@ const pillarMeta: Record<
 const emptyDraft: TaskDraft = {
   id: '',
   parentId: '',
+  predecessorId: '',
   pillar: 'Empresa',
   item: '',
   title: '',
@@ -95,47 +103,112 @@ async function json<T>(response: Response): Promise<T> {
 function taskDepth(task: Task, map: Map<string, Task>) {
   let depth = 0;
   let parent = task.parentId ? map.get(task.parentId) : undefined;
-  while (parent && depth < 3) {
+  while (parent && depth < 5) {
     depth += 1;
     parent = parent.parentId ? map.get(parent.parentId) : undefined;
   }
   return depth;
 }
 
+function formatDate(value: string) {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(
+    new Date(`${value}T12:00:00Z`),
+  );
+}
+
+function withGroupSummaries(tasks: Task[]) {
+  const children = new Map<string, Task[]>();
+  for (const task of tasks) {
+    if (!task.parentId) continue;
+    children.set(task.parentId, [...(children.get(task.parentId) ?? []), task]);
+  }
+  const descendants = (id: string): Task[] =>
+    (children.get(id) ?? []).flatMap((child) =>
+      child.kind === 'group' ? descendants(child.id) : [child],
+    );
+  return tasks.map((task) => {
+    if (task.kind !== 'group') return task;
+    const leaves = descendants(task.id);
+    const starts = leaves
+      .map((child) => child.startDate)
+      .filter(Boolean)
+      .sort();
+    const ends = leaves
+      .map((child) => child.endDate)
+      .filter(Boolean)
+      .sort();
+    const progress = leaves.length
+      ? Math.round(
+          leaves.reduce((sum, child) => sum + child.progress, 0) /
+            leaves.length,
+        )
+      : 0;
+    return {
+      ...task,
+      startDate: starts[0] ?? '',
+      endDate: ends.at(-1) ?? '',
+      progress,
+      status:
+        progress === 100
+          ? 'Concluído'
+          : progress > 0
+            ? 'Em andamento'
+            : 'Não iniciado',
+    };
+  });
+}
+
 export function TrackingClient() {
   const [view, setView] = useState<'projects' | 'template'>('projects');
+  const [projectMode, setProjectMode] = useState<'schedule' | 'gantt'>(
+    'schedule',
+  );
   const [templateTasks, setTemplateTasks] = useState<Task[]>([]);
   const [revision, setRevision] = useState(1);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [isEditor, setIsEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingTaskId, setSavingTaskId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [authOpen, setAuthOpen] = useState(false);
   const [password, setPassword] = useState('');
-  const [pendingAction, setPendingAction] = useState<'project' | 'task' | null>(
-    null,
-  );
+  const [pendingAction, setPendingAction] = useState<
+    'project' | 'task' | 'schedule' | null
+  >(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
+  const [projectStartDate, setProjectStartDate] = useState('');
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyDraft);
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
 
   const loadProject = useCallback(async (id: string) => {
     if (!id) {
+      setSelectedProject(null);
       setProjectTasks([]);
       return;
     }
-    const data = await json<{ tasks: Task[] }>(
+    const data = await json<{
+      project: Project;
+      projects: Project[];
+      tasks: Task[];
+    }>(
       await fetch(
         `/api/project-tracking/projects?id=${encodeURIComponent(id)}`,
-        { cache: 'no-store' },
+        {
+          cache: 'no-store',
+        },
       ),
     );
+    setProjects(data.projects);
+    setSelectedProject(data.project);
+    setProjectStartDate(data.project.startDate);
     setProjectTasks(data.tasks);
   }, []);
 
@@ -158,10 +231,13 @@ export function TrackingClient() {
       setRevision(template.revision);
       setProjects(projectData.projects);
       setIsEditor(session.authenticated);
-      const nextProject =
-        selectedProjectId || projectData.projects[0]?.id || '';
-      setSelectedProjectId(nextProject);
-      if (nextProject) await loadProject(nextProject);
+      const next =
+        projectData.projects.find((project) => project.id === selectedProjectId)
+          ?.id ??
+        projectData.projects[0]?.id ??
+        '';
+      setSelectedProjectId(next);
+      await loadProject(next);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -177,10 +253,12 @@ export function TrackingClient() {
     void loadAll();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedProject = projects.find(
-    (project) => project.id === selectedProjectId,
+  const displayProjectTasks = useMemo(
+    () => withGroupSummaries(projectTasks),
+    [projectTasks],
   );
-  const visibleTasks = view === 'template' ? templateTasks : projectTasks;
+  const visibleTasks =
+    view === 'template' ? templateTasks : displayProjectTasks;
   const counts = useMemo(
     () =>
       Object.fromEntries(
@@ -203,9 +281,10 @@ export function TrackingClient() {
     setTaskDialogOpen(true);
   }
 
-  function requireAccess(action: 'project' | 'task') {
+  function requireAccess(action: 'project' | 'task' | 'schedule') {
     if (isEditor) {
-      action === 'project' ? setProjectDialogOpen(true) : openNewTask();
+      if (action === 'project') setProjectDialogOpen(true);
+      if (action === 'task') openNewTask();
       return;
     }
     setPendingAction(action);
@@ -245,7 +324,10 @@ export function TrackingClient() {
         await fetch('/api/project-tracking/projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: projectName }),
+          body: JSON.stringify({
+            name: projectName,
+            startDate: projectStartDate,
+          }),
         }),
       );
       setProjectDialogOpen(false);
@@ -255,7 +337,7 @@ export function TrackingClient() {
       await loadProject(data.project.id);
       setView('projects');
       setNotice(
-        `Projeto ${data.project.name} criado com a revisão ${data.project.templateRevision} do modelo.`,
+        `Projeto ${data.project.name} criado com a revisão ${data.project.templateRevision} do padrão.`,
       );
     } catch (reason) {
       setError(
@@ -268,10 +350,77 @@ export function TrackingClient() {
     }
   }
 
+  async function saveProjectStart() {
+    if (!selectedProject) return;
+    setSaving(true);
+    setError('');
+    try {
+      await json(
+        await fetch('/api/project-tracking/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: selectedProject.id,
+            projectStartDate,
+          }),
+        }),
+      );
+      await loadProject(selectedProject.id);
+      setNotice(
+        'Data inicial do projeto atualizada. As datas das atividades permanecem preservadas.',
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Não foi possível salvar a data.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function patchProjectTask(id: string, changes: Partial<Task>) {
+    setProjectTasks((current) =>
+      current.map((task) => (task.id === id ? { ...task, ...changes } : task)),
+    );
+  }
+
+  async function saveProjectTask(task: Task) {
+    if (!selectedProject) return;
+    setSavingTaskId(task.id);
+    setError('');
+    setNotice('');
+    try {
+      await json(
+        await fetch('/api/project-tracking/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: selectedProject.id,
+            taskId: task.id,
+            ...task,
+          }),
+        }),
+      );
+      await loadProject(selectedProject.id);
+      setNotice(`${task.item} salva no cronograma do projeto.`);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Não foi possível salvar a atividade.',
+      );
+    } finally {
+      setSavingTaskId('');
+    }
+  }
+
   function openEditTask(task: Task) {
     setTaskDraft({
       id: task.id,
       parentId: task.parentId ?? '',
+      predecessorId: task.predecessorId ?? '',
       pillar: task.pillar,
       item: task.item,
       title: task.title,
@@ -295,6 +444,7 @@ export function TrackingClient() {
           body: JSON.stringify({
             ...taskDraft,
             parentId: taskDraft.parentId || null,
+            predecessorId: taskDraft.predecessorId || null,
           }),
         }),
       );
@@ -303,8 +453,8 @@ export function TrackingClient() {
       setTaskDialogOpen(false);
       setNotice(
         taskDraft.id
-          ? 'Atividade atualizada no modelo padrão.'
-          : 'Atividade adicionada ao modelo padrão.',
+          ? 'Atividade atualizada no padrão.'
+          : 'Atividade adicionada ao padrão.',
       );
     } catch (reason) {
       setError(
@@ -321,7 +471,6 @@ export function TrackingClient() {
     if (!deleteTask) return;
     setSaving(true);
     setError('');
-    setNotice('');
     try {
       const data = await json<{ revision: number; tasks: Task[] }>(
         await fetch('/api/project-tracking/template', {
@@ -334,7 +483,7 @@ export function TrackingClient() {
       setRevision(data.revision);
       setDeleteTask(null);
       setNotice(
-        'Atividade removida do modelo padrão. Projetos já criados permanecem inalterados.',
+        'Atividade removida do padrão. Projetos existentes permanecem inalterados.',
       );
     } catch (reason) {
       setError(
@@ -364,11 +513,14 @@ export function TrackingClient() {
   const parentChoices = templateTasks.filter(
     (task) => task.pillar === taskDraft.pillar && task.id !== taskDraft.id,
   );
+  const predecessorChoices = templateTasks.filter(
+    (task) => task.kind !== 'group' && task.id !== taskDraft.id,
+  );
 
   return (
     <main className="min-h-screen bg-[#f4f6f7] text-slate-900">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-[1560px] items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div className="flex items-center gap-4">
             <a
               href="/"
@@ -384,9 +536,11 @@ export function TrackingClient() {
             />
             <div className="hidden border-l border-slate-200 pl-4 sm:block">
               <p className="text-sm font-bold text-slate-800">
-                Acompanhamento de projetos
+                Project padrão Makro
               </p>
-              <p className="text-xs text-slate-500">Padrão Makro</p>
+              <p className="text-xs text-slate-500">
+                Cronograma de mobilização
+              </p>
             </div>
           </div>
           <Button size="lg" onClick={() => requireAccess('project')}>
@@ -395,18 +549,19 @@ export function TrackingClient() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-5 py-7 sm:px-8">
+      <div className="mx-auto max-w-[1560px] px-5 py-7 sm:px-8">
         <section className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#ed1c24]">
               Estrutura corporativa
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              Modelo padrão de mobilização
+              Cronograma padrão de projetos
             </h1>
-            <p className="mt-2 max-w-2xl text-base leading-6 text-slate-600">
-              Novos projetos recebem uma cópia congelada do modelo vigente.
-              Alterações futuras ficam restritas ao modelo padrão.
+            <p className="mt-2 max-w-3xl text-base leading-6 text-slate-600">
+              A estrutura e a numeração vêm do padrão Makro. Em cada projeto,
+              datas, durações, predecessoras, responsáveis, progresso, status e
+              observações podem ser preenchidos sem alterar o modelo.
             </p>
           </div>
           <div
@@ -424,7 +579,7 @@ export function TrackingClient() {
               onClick={() => setView('template')}
               className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold ${view === 'template' ? 'bg-[#103f85] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
             >
-              <Settings2 size={16} /> Modelo padrão
+              <Settings2 size={16} /> Padrão
             </button>
           </div>
         </section>
@@ -469,13 +624,14 @@ export function TrackingClient() {
         </section>
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col justify-between gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center">
+          <div className="flex flex-col justify-between gap-4 border-b border-slate-200 px-5 py-4 xl:flex-row xl:items-center">
             {view === 'projects' ? (
-              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center">
                 <div>
-                  <h2 className="text-lg font-bold">Projeto</h2>
+                  <h2 className="text-lg font-bold">Cronograma do projeto</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Estrutura somente para consulta.
+                    Estrutura bloqueada. Planejamento e acompanhamento
+                    editáveis.
                   </p>
                 </div>
                 {projects.length > 0 && (
@@ -491,22 +647,72 @@ export function TrackingClient() {
                     ))}
                   </select>
                 )}
+                {selectedProject && (
+                  <div className="flex items-end gap-2">
+                    <label className="grid gap-1 text-xs font-bold text-slate-500">
+                      Início do projeto
+                      <input
+                        type="date"
+                        value={projectStartDate}
+                        disabled={!isEditor}
+                        onChange={(event) =>
+                          setProjectStartDate(event.target.value)
+                        }
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 disabled:bg-slate-50"
+                      />
+                    </label>
+                    {isEditor && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void saveProjectStart()}
+                        disabled={saving}
+                      >
+                        <Save /> Salvar
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div>
-                <h2 className="text-lg font-bold">Modelo padrão editável</h2>
+                <h2 className="text-lg font-bold">Padrão Makro editável</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Revisão {revision}. As alterações valem apenas para novos
-                  projetos.
+                  Revisão {revision}. Mudanças estruturais valem para projetos
+                  novos.
                 </p>
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {view === 'projects' && selectedProject && (
                 <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">
-                  <LockKeyhole size={15} /> Revisão{' '}
+                  <LockKeyhole size={15} /> Estrutura da revisão{' '}
                   {selectedProject.templateRevision}
                 </span>
+              )}
+              {view === 'projects' && selectedProject && (
+                <div className="flex rounded-lg border border-slate-200 p-1">
+                  <button
+                    onClick={() => setProjectMode('schedule')}
+                    className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-bold ${projectMode === 'schedule' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}
+                  >
+                    <Table2 size={14} /> Tabela
+                  </button>
+                  <button
+                    onClick={() => setProjectMode('gantt')}
+                    className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-bold ${projectMode === 'gantt' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}
+                  >
+                    <BarChart3 size={14} /> Gantt
+                  </button>
+                </div>
+              )}
+              {view === 'projects' && selectedProject && !isEditor && (
+                <Button
+                  variant="outline"
+                  onClick={() => requireAccess('schedule')}
+                >
+                  <KeyRound /> Editar cronograma
+                </Button>
               )}
               {view === 'template' &&
                 (isEditor ? (
@@ -518,7 +724,7 @@ export function TrackingClient() {
                     variant="outline"
                     onClick={() => requireAccess('task')}
                   >
-                    <KeyRound /> Editar modelo
+                    <KeyRound /> Editar padrão
                   </Button>
                 ))}
             </div>
@@ -527,7 +733,7 @@ export function TrackingClient() {
           {loading ? (
             <div className="flex items-center justify-center gap-2 px-5 py-16 text-slate-500">
               <RefreshCw className="animate-spin" size={18} /> Carregando
-              acompanhamento...
+              cronograma...
             </div>
           ) : view === 'projects' && projects.length === 0 ? (
             <div className="px-5 py-16 text-center">
@@ -536,20 +742,30 @@ export function TrackingClient() {
               </div>
               <h3 className="mt-4 text-lg font-bold">Nenhum projeto criado</h3>
               <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-                Crie o primeiro projeto para gerar uma cópia bloqueada do modelo
-                padrão.
+                Crie o primeiro projeto para receber a estrutura padrão e montar
+                o cronograma com datas e acompanhamento.
               </p>
               <Button className="mt-5" onClick={() => requireAccess('project')}>
                 <Plus /> Criar projeto
               </Button>
             </div>
-          ) : (
-            <TaskTable
-              tasks={visibleTasks}
-              editable={view === 'template' && isEditor}
+          ) : view === 'template' ? (
+            <TemplateTable
+              tasks={templateTasks}
+              editable={isEditor}
               onAdd={openNewTask}
               onEdit={openEditTask}
               onDelete={setDeleteTask}
+            />
+          ) : projectMode === 'gantt' ? (
+            <GanttView tasks={displayProjectTasks} />
+          ) : (
+            <ProjectScheduleTable
+              tasks={displayProjectTasks}
+              editable={isEditor}
+              savingTaskId={savingTaskId}
+              onChange={patchProjectTask}
+              onSave={saveProjectTask}
             />
           )}
         </section>
@@ -560,7 +776,8 @@ export function TrackingClient() {
           <DialogHeader>
             <DialogTitle>Acesso de edição</DialogTitle>
             <DialogDescription>
-              Informe a senha do PMO para editar o modelo ou criar projetos.
+              Informe a senha do PMO para editar o padrão, criar projetos ou
+              atualizar cronogramas.
             </DialogDescription>
           </DialogHeader>
           <label className="grid gap-2 text-sm font-semibold">
@@ -594,22 +811,32 @@ export function TrackingClient() {
           <DialogHeader>
             <DialogTitle>Novo projeto</DialogTitle>
             <DialogDescription>
-              O projeto receberá a revisão {revision} do modelo e não poderá
-              alterar essa estrutura.
+              O projeto receberá a revisão {revision}. A estrutura ficará
+              bloqueada, mas o cronograma será editável.
             </DialogDescription>
           </DialogHeader>
-          <label className="grid gap-2 text-sm font-semibold">
-            Nome do projeto
-            <Input
-              placeholder="Ex.: S11D"
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void createProject();
-              }}
-              autoFocus
-            />
-          </label>
+          <div className="grid gap-4">
+            <label className="grid gap-2 text-sm font-semibold">
+              Nome do projeto
+              <Input
+                placeholder="Ex.: S11D"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                autoFocus
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-semibold">
+              Data inicial do projeto{' '}
+              <span className="font-normal text-slate-500">
+                Pode ser alterada depois.
+              </span>
+              <Input
+                type="date"
+                value={projectStartDate}
+                onChange={(event) => setProjectStartDate(event.target.value)}
+              />
+            </label>
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
@@ -638,8 +865,8 @@ export function TrackingClient() {
                   : 'Nova atividade'}
             </DialogTitle>
             <DialogDescription>
-              Esta alteração atualiza o modelo usado somente por projetos
-              criados daqui em diante.
+              Esta mudança atualiza o padrão usado por projetos criados daqui em
+              diante.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -669,7 +896,7 @@ export function TrackingClient() {
                 onChange={(event) =>
                   setTaskDraft((draft) => ({
                     ...draft,
-                    kind: event.target.value as Task['kind'],
+                    kind: event.target.value as TaskKind,
                   }))
                 }
                 className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm"
@@ -682,7 +909,7 @@ export function TrackingClient() {
             <label className="grid gap-2 text-sm font-semibold">
               Item
               <Input
-                placeholder="Ex.: 2.9"
+                placeholder="Ex.: 2.5.5"
                 value={taskDraft.item}
                 onChange={(event) =>
                   setTaskDraft((draft) => ({
@@ -753,6 +980,28 @@ export function TrackingClient() {
                 </select>
               </label>
             )}
+            {taskDraft.kind !== 'group' && (
+              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+                Predecessora padrão (opcional)
+                <select
+                  value={taskDraft.predecessorId}
+                  onChange={(event) =>
+                    setTaskDraft((draft) => ({
+                      ...draft,
+                      predecessorId: event.target.value,
+                    }))
+                  }
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm"
+                >
+                  <option value="">Sem predecessora</option>
+                  {predecessorChoices.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.item} — {task.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTaskDialogOpen(false)}>
@@ -778,11 +1027,10 @@ export function TrackingClient() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir atividade do modelo?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir atividade do padrão?</AlertDialogTitle>
             <AlertDialogDescription>
               A atividade “{deleteTask?.title}” e suas subtarefas serão
-              removidas do modelo padrão. Projetos já criados não serão
-              alterados.
+              removidas do padrão. Projetos existentes não serão alterados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -801,7 +1049,54 @@ export function TrackingClient() {
   );
 }
 
-function TaskTable({
+function PillarRow({ pillar, colSpan }: { pillar: Pillar; colSpan: number }) {
+  const meta = pillarMeta[pillar];
+  const Icon = meta.icon;
+  return (
+    <tr>
+      <td
+        colSpan={colSpan}
+        className="px-4 py-3"
+        style={{ background: meta.soft }}
+      >
+        <span
+          className="inline-flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.12em]"
+          style={{ color: meta.accent }}
+        >
+          <Icon size={17} /> {pillar}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function TaskName({ task, map }: { task: Task; map: Map<string, Task> }) {
+  const depth = taskDepth(task, map);
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{ paddingLeft: `${depth * 18}px` }}
+    >
+      {depth > 0 && (
+        <ChevronRight size={14} className="shrink-0 text-slate-300" />
+      )}
+      {task.kind === 'milestone' && (
+        <CircleDot size={15} className="shrink-0 text-[#ed1c24]" />
+      )}
+      <span
+        className={
+          task.kind === 'group'
+            ? 'font-extrabold uppercase tracking-wide text-slate-700'
+            : 'font-medium text-slate-800'
+        }
+      >
+        {task.title}
+      </span>
+    </div>
+  );
+}
+
+function TemplateTable({
   tasks,
   editable,
   onAdd,
@@ -814,132 +1109,410 @@ function TaskTable({
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
 }) {
-  const map = useMemo(
-    () => new Map(tasks.map((task) => [task.id, task])),
-    [tasks],
-  );
-  if (!tasks.length)
-    return (
-      <div className="px-5 py-14 text-center text-sm text-slate-500">
-        Nenhuma atividade disponível.
-      </div>
-    );
+  const map = new Map(tasks.map((task) => [task.id, task]));
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[880px] text-left">
+      <table className="w-full min-w-[940px] text-left">
         <thead className="bg-slate-50 text-sm text-slate-500">
           <tr>
-            <th className="w-24 px-5 py-3 font-semibold">Item</th>
-            <th className="px-5 py-3 font-semibold">Atividade</th>
-            <th className="w-52 px-5 py-3 font-semibold">Responsável</th>
-            <th className="w-24 px-5 py-3 text-center font-semibold">Dias</th>
-            {editable && (
-              <th className="w-32 px-5 py-3 text-right font-semibold">Ações</th>
-            )}
+            <th className="w-28 px-4 py-3">Item</th>
+            <th className="px-4 py-3">Atividade</th>
+            <th className="w-52 px-4 py-3">Responsável</th>
+            <th className="w-32 px-4 py-3">Predecessora</th>
+            <th className="w-20 px-4 py-3 text-center">Dias</th>
+            {editable && <th className="w-32 px-4 py-3 text-right">Ações</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {(['Empresa', 'Pessoas', 'Equipamentos'] as Pillar[]).flatMap(
             (pillar) => {
-              const meta = pillarMeta[pillar];
-              const Icon = meta.icon;
               const pillarTasks = tasks
                 .filter((task) => task.pillar === pillar)
                 .sort((a, b) => a.sortOrder - b.sortOrder);
               if (!pillarTasks.length) return [];
               return [
-                <tr key={`${pillar}-header`}>
-                  <td
-                    colSpan={editable ? 5 : 4}
-                    className="px-5 py-3"
-                    style={{ background: meta.soft }}
+                <PillarRow
+                  key={`${pillar}-header`}
+                  pillar={pillar}
+                  colSpan={editable ? 6 : 5}
+                />,
+                ...pillarTasks.map((task) => (
+                  <tr
+                    key={task.id}
+                    className={
+                      task.kind === 'group'
+                        ? 'bg-slate-50/70'
+                        : 'hover:bg-slate-50/60'
+                    }
                   >
-                    <span
-                      className="inline-flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.12em]"
-                      style={{ color: meta.accent }}
-                    >
-                      <Icon size={17} /> {pillar}
-                    </span>
-                  </td>
-                </tr>,
+                    <td className="px-4 py-3 text-sm font-bold text-[#103f85]">
+                      {task.item}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <TaskName task={task} map={map} />
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {task.owner || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {task.predecessorId
+                        ? map.get(task.predecessorId)?.item
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center text-sm font-semibold text-slate-600">
+                      {task.kind === 'group' ? '—' : task.durationDays}
+                    </td>
+                    {editable && (
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Adicionar subtarefa em ${task.title}`}
+                            onClick={() => onAdd(task)}
+                          >
+                            <Plus />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Editar ${task.title}`}
+                            onClick={() => onEdit(task)}
+                          >
+                            <Pencil />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="destructive"
+                            aria-label={`Excluir ${task.title}`}
+                            onClick={() => onDelete(task)}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                )),
+              ] as React.ReactNode[];
+            },
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProjectScheduleTable({
+  tasks,
+  editable,
+  savingTaskId,
+  onChange,
+  onSave,
+}: {
+  tasks: Task[];
+  editable: boolean;
+  savingTaskId: string;
+  onChange: (id: string, changes: Partial<Task>) => void;
+  onSave: (task: Task) => void;
+}) {
+  const map = new Map(tasks.map((task) => [task.id, task]));
+  const choices = tasks.filter((task) => task.kind !== 'group');
+  const fieldClass =
+    'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1880px] text-left">
+        <thead className="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            <th className="w-24 px-3 py-3">Item</th>
+            <th className="w-[360px] px-3 py-3">Atividade</th>
+            <th className="w-44 px-3 py-3">Responsável</th>
+            <th className="w-32 px-3 py-3">Predecessora</th>
+            <th className="w-36 px-3 py-3">Início</th>
+            <th className="w-36 px-3 py-3">Término</th>
+            <th className="w-20 px-3 py-3">Dias</th>
+            <th className="w-28 px-3 py-3">Progresso</th>
+            <th className="w-40 px-3 py-3">Status</th>
+            <th className="min-w-64 px-3 py-3">Observação</th>
+            {editable && <th className="w-20 px-3 py-3"></th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {(['Empresa', 'Pessoas', 'Equipamentos'] as Pillar[]).flatMap(
+            (pillar) => {
+              const pillarTasks = tasks
+                .filter((task) => task.pillar === pillar)
+                .sort((a, b) => a.sortOrder - b.sortOrder);
+              if (!pillarTasks.length) return [];
+              return [
+                <PillarRow
+                  key={`${pillar}-project-header`}
+                  pillar={pillar}
+                  colSpan={editable ? 11 : 10}
+                />,
                 ...pillarTasks.map((task) => {
-                  const depth = taskDepth(task, map);
-                  const group = task.kind === 'group';
+                  const summary = task.kind === 'group';
                   return (
                     <tr
                       key={task.id}
                       className={
-                        group ? 'bg-slate-50/70' : 'hover:bg-slate-50/60'
+                        summary ? 'bg-slate-50/70' : 'hover:bg-slate-50/50'
                       }
                     >
-                      <td className="px-5 py-3.5 text-sm font-bold text-[#103f85]">
+                      <td className="px-3 py-2.5 text-xs font-bold text-[#103f85]">
                         {task.item}
                       </td>
-                      <td className="px-5 py-3.5">
-                        <div
-                          className="flex items-center gap-2"
-                          style={{ paddingLeft: `${depth * 22}px` }}
-                        >
-                          {depth > 0 && (
-                            <ChevronRight
-                              size={15}
-                              className="text-slate-300"
-                            />
-                          )}
-                          {task.kind === 'milestone' && (
-                            <CircleDot size={16} className="text-[#ed1c24]" />
-                          )}
-                          <span
-                            className={`text-sm ${group ? 'font-extrabold uppercase tracking-wide text-slate-700' : 'font-medium text-slate-800'}`}
+                      <td className="px-3 py-2.5 text-xs">
+                        <TaskName task={task} map={map} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : (
+                          <input
+                            value={task.owner}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, { owner: e.target.value })
+                            }
+                            className={`${fieldClass} w-full`}
+                          />
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          '—'
+                        ) : (
+                          <select
+                            value={task.predecessorId ?? ''}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, {
+                                predecessorId: e.target.value || null,
+                                startDate: e.target.value ? '' : task.startDate,
+                              })
+                            }
+                            className={`${fieldClass} w-full`}
                           >
-                            {task.title}
+                            <option value="">Sem</option>
+                            {choices
+                              .filter((choice) => choice.id !== task.id)
+                              .map((choice) => (
+                                <option key={choice.id} value={choice.id}>
+                                  {choice.item}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          <span className="text-xs">
+                            {formatDate(task.startDate)}
                           </span>
-                        </div>
+                        ) : (
+                          <input
+                            type="date"
+                            value={task.startDate}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, { startDate: e.target.value })
+                            }
+                            className={`${fieldClass} w-full`}
+                          />
+                        )}
                       </td>
-                      <td className="px-5 py-3.5 text-sm text-slate-600">
-                        {task.owner || '—'}
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          <span className="text-xs">
+                            {formatDate(task.endDate)}
+                          </span>
+                        ) : (
+                          <input
+                            type="date"
+                            value={task.endDate}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, { endDate: e.target.value })
+                            }
+                            className={`${fieldClass} w-full`}
+                          />
+                        )}
                       </td>
-                      <td className="px-5 py-3.5 text-center text-sm font-semibold text-slate-600">
-                        {group ? '—' : task.durationDays}
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          '—'
+                        ) : (
+                          <input
+                            type="number"
+                            min={task.kind === 'milestone' ? 0 : 1}
+                            value={task.durationDays}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, {
+                                durationDays: Number(e.target.value),
+                              })
+                            }
+                            className={`${fieldClass} w-full`}
+                          />
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          <span className="text-xs font-bold">
+                            {task.progress}%
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={task.progress}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, {
+                                  progress: Number(e.target.value),
+                                })
+                              }
+                              className={`${fieldClass} w-16`}
+                            />
+                            <span className="text-xs text-slate-400">%</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          <span className="text-xs font-semibold">
+                            {task.status}
+                          </span>
+                        ) : (
+                          <select
+                            value={task.status}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, { status: e.target.value })
+                            }
+                            className={`${fieldClass} w-full`}
+                          >
+                            {statuses.map((status) => (
+                              <option key={status}>{status}</option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {summary ? (
+                          '—'
+                        ) : (
+                          <input
+                            value={task.observation}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              onChange(task.id, { observation: e.target.value })
+                            }
+                            placeholder="Registro do acompanhamento"
+                            className={`${fieldClass} w-full`}
+                          />
+                        )}
                       </td>
                       {editable && (
-                        <td className="px-5 py-3.5">
-                          <div className="flex justify-end gap-1">
+                        <td className="px-3 py-2.5">
+                          {!summary && (
                             <Button
                               size="icon-sm"
-                              variant="ghost"
-                              aria-label={`Adicionar subtarefa em ${task.title}`}
-                              onClick={() => onAdd(task)}
+                              variant="outline"
+                              aria-label={`Salvar ${task.item}`}
+                              disabled={savingTaskId === task.id}
+                              onClick={() => onSave(task)}
                             >
-                              <Plus />
+                              {savingTaskId === task.id ? (
+                                <RefreshCw className="animate-spin" />
+                              ) : (
+                                <Save />
+                              )}
                             </Button>
-                            <Button
-                              size="icon-sm"
-                              variant="ghost"
-                              aria-label={`Editar ${task.title}`}
-                              onClick={() => onEdit(task)}
-                            >
-                              <Pencil />
-                            </Button>
-                            <Button
-                              size="icon-sm"
-                              variant="destructive"
-                              aria-label={`Excluir ${task.title}`}
-                              onClick={() => onDelete(task)}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
+                          )}
                         </td>
                       )}
                     </tr>
                   );
                 }),
-              ];
+              ] as React.ReactNode[];
             },
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function GanttView({ tasks }: { tasks: Task[] }) {
+  const dated = tasks.filter((task) => task.startDate && task.endDate);
+  if (!dated.length)
+    return (
+      <div className="px-6 py-16 text-center text-sm text-slate-500">
+        Preencha as datas do cronograma para visualizar o Gantt.
+      </div>
+    );
+  const min = Math.min(
+    ...dated.map((task) => Date.parse(`${task.startDate}T12:00:00Z`)),
+  );
+  const max = Math.max(
+    ...dated.map((task) => Date.parse(`${task.endDate}T12:00:00Z`)),
+  );
+  const span = Math.max(1, (max - min) / 86_400_000 + 1);
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[980px] p-5">
+        <div className="mb-3 grid grid-cols-[360px_1fr] gap-4 text-xs font-bold text-slate-500">
+          <span>Atividade</span>
+          <div className="flex justify-between">
+            <span>{formatDate(new Date(min).toISOString().slice(0, 10))}</span>
+            <span>{formatDate(new Date(max).toISOString().slice(0, 10))}</span>
+          </div>
+        </div>
+        <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+          {dated.map((task) => {
+            const start =
+              (Date.parse(`${task.startDate}T12:00:00Z`) - min) / 86_400_000;
+            const length =
+              (Date.parse(`${task.endDate}T12:00:00Z`) -
+                Date.parse(`${task.startDate}T12:00:00Z`)) /
+                86_400_000 +
+              1;
+            const color = pillarMeta[task.pillar].accent;
+            return (
+              <div
+                key={task.id}
+                className="grid min-h-12 grid-cols-[360px_1fr] items-center gap-4 px-3"
+              >
+                <div className="truncate pr-4 text-xs">
+                  <strong className="mr-2 text-[#103f85]">{task.item}</strong>
+                  {task.title}
+                </div>
+                <div className="relative h-6 rounded bg-slate-100">
+                  <div
+                    className="absolute top-1 h-4 min-w-2 rounded"
+                    style={{
+                      left: `${(start / span) * 100}%`,
+                      width: `${Math.max((length / span) * 100, 0.8)}%`,
+                      background: color,
+                      opacity: task.kind === 'group' ? 0.45 : 0.9,
+                    }}
+                  >
+                    <span
+                      className="absolute inset-y-0 left-0 rounded bg-black/20"
+                      style={{ width: `${task.progress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

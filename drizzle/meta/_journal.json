@@ -36,6 +36,13 @@
       "when": 1789574119372,
       "tag": "0004_dry_dazzler",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789575949078,
+      "tag": "0005_sparkling_havok",
+      "breakpoints": true
     }
   ]
 }
