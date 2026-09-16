@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { CalendarDays } from 'lucide-react';
 
 export default function Home() {
@@ -17,7 +16,7 @@ export default function Home() {
         </section>
 
         <section className="mt-9 max-w-xl" aria-label="Ferramentas disponíveis">
-          <Link
+          <a
             href="/postits"
             className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
           >
@@ -27,7 +26,7 @@ export default function Home() {
               <span className="mt-1 block text-sm leading-5 text-slate-600">Acompanhamento semanal de ações, responsáveis e prazos.</span>
             </span>
             <span aria-hidden="true" className="text-2xl text-[#ed1c24] transition-transform group-hover:translate-x-1">→</span>
-          </Link>
+          </a>
         </section>
       </div>
     </main>
