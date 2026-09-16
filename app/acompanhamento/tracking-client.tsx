@@ -685,10 +685,6 @@ export function TrackingClient() {
               <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center">
                 <div>
                   <h2 className="text-lg font-bold">Cronograma do projeto</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Estrutura bloqueada. Planejamento e acompanhamento
-                    editáveis.
-                  </p>
                 </div>
                 {projects.length > 0 && (
                   <select
