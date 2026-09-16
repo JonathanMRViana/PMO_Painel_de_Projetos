@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   BarChart3,
   Building2,
+  ChevronDown,
   ChevronRight,
   CircleDot,
   HardHat,
@@ -164,6 +165,9 @@ export function TrackingClient() {
   const [projectMode, setProjectMode] = useState<'schedule' | 'gantt'>(
     'schedule',
   );
+  const [collapsedPillars, setCollapsedPillars] = useState<Set<Pillar>>(
+    new Set(),
+  );
   const [templateTasks, setTemplateTasks] = useState<Task[]>([]);
   const [revision, setRevision] = useState(1);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -282,6 +286,15 @@ export function TrackingClient() {
       parentId: parent?.id ?? '',
     });
     setTaskDialogOpen(true);
+  }
+
+  function togglePillar(pillar: Pillar) {
+    setCollapsedPillars((current) => {
+      const next = new Set(current);
+      if (next.has(pillar)) next.delete(pillar);
+      else next.add(pillar);
+      return next;
+    });
   }
 
   function openDeleteProject(project: Project) {
@@ -809,16 +822,24 @@ export function TrackingClient() {
             <TemplateTable
               tasks={templateTasks}
               editable={isEditor}
+              collapsedPillars={collapsedPillars}
+              onTogglePillar={togglePillar}
               onAdd={openNewTask}
               onEdit={openEditTask}
               onDelete={setDeleteTask}
             />
           ) : projectMode === 'gantt' ? (
-            <GanttView tasks={displayProjectTasks} />
+            <GanttView
+              tasks={displayProjectTasks}
+              collapsedPillars={collapsedPillars}
+              onTogglePillar={togglePillar}
+            />
           ) : (
             <ProjectScheduleTable
               tasks={displayProjectTasks}
               editable={isEditor}
+              collapsedPillars={collapsedPillars}
+              onTogglePillar={togglePillar}
               savingTaskId={savingTaskId}
               onChange={patchProjectTask}
               onSave={saveProjectTask}
@@ -1152,7 +1173,17 @@ export function TrackingClient() {
   );
 }
 
-function PillarRow({ pillar, colSpan }: { pillar: Pillar; colSpan: number }) {
+function PillarRow({
+  pillar,
+  colSpan,
+  collapsed,
+  onToggle,
+}: {
+  pillar: Pillar;
+  colSpan: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const meta = pillarMeta[pillar];
   const Icon = meta.icon;
   return (
@@ -1162,12 +1193,21 @@ function PillarRow({ pillar, colSpan }: { pillar: Pillar; colSpan: number }) {
         className="px-4 py-3"
         style={{ background: meta.soft }}
       >
-        <span
-          className="inline-flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.12em]"
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          onClick={onToggle}
+          className="flex w-full items-center justify-between gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#103f85]/40"
           style={{ color: meta.accent }}
         >
-          <Icon size={17} /> {pillar}
-        </span>
+          <span className="inline-flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.12em]">
+            {collapsed ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
+            <Icon size={17} /> {pillar}
+          </span>
+          <span className="text-xs font-bold normal-case tracking-normal">
+            {collapsed ? 'Expandir' : 'Recolher'}
+          </span>
+        </button>
       </td>
     </tr>
   );
@@ -1202,12 +1242,16 @@ function TaskName({ task, map }: { task: Task; map: Map<string, Task> }) {
 function TemplateTable({
   tasks,
   editable,
+  collapsedPillars,
+  onTogglePillar,
   onAdd,
   onEdit,
   onDelete,
 }: {
   tasks: Task[];
   editable: boolean;
+  collapsedPillars: Set<Pillar>;
+  onTogglePillar: (pillar: Pillar) => void;
   onAdd: (parent?: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -1238,65 +1282,69 @@ function TemplateTable({
                   key={`${pillar}-header`}
                   pillar={pillar}
                   colSpan={editable ? 6 : 5}
+                  collapsed={collapsedPillars.has(pillar)}
+                  onToggle={() => onTogglePillar(pillar)}
                 />,
-                ...pillarTasks.map((task) => (
-                  <tr
-                    key={task.id}
-                    className={
-                      task.kind === 'group'
-                        ? 'bg-slate-50/70'
-                        : 'hover:bg-slate-50/60'
-                    }
-                  >
-                    <td className="px-4 py-3 text-sm font-bold text-[#103f85]">
-                      {task.item}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <TaskName task={task} map={map} />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {task.owner || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {task.predecessorId
-                        ? map.get(task.predecessorId)?.item
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm font-semibold text-slate-600">
-                      {task.kind === 'group' ? '—' : task.durationDays}
-                    </td>
-                    {editable && (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label={`Adicionar subtarefa em ${task.title}`}
-                            onClick={() => onAdd(task)}
-                          >
-                            <Plus />
-                          </Button>
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label={`Editar ${task.title}`}
-                            onClick={() => onEdit(task)}
-                          >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            size="icon-sm"
-                            variant="destructive"
-                            aria-label={`Excluir ${task.title}`}
-                            onClick={() => onDelete(task)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
+                ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
+                  (task) => (
+                    <tr
+                      key={task.id}
+                      className={
+                        task.kind === 'group'
+                          ? 'bg-slate-50/70'
+                          : 'hover:bg-slate-50/60'
+                      }
+                    >
+                      <td className="px-4 py-3 text-sm font-bold text-[#103f85]">
+                        {task.item}
                       </td>
-                    )}
-                  </tr>
-                )),
+                      <td className="px-4 py-3 text-sm">
+                        <TaskName task={task} map={map} />
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {task.owner || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {task.predecessorId
+                          ? map.get(task.predecessorId)?.item
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm font-semibold text-slate-600">
+                        {task.kind === 'group' ? '—' : task.durationDays}
+                      </td>
+                      {editable && (
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={`Adicionar subtarefa em ${task.title}`}
+                              onClick={() => onAdd(task)}
+                            >
+                              <Plus />
+                            </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={`Editar ${task.title}`}
+                              onClick={() => onEdit(task)}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="destructive"
+                              aria-label={`Excluir ${task.title}`}
+                              onClick={() => onDelete(task)}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ),
+                ),
               ] as React.ReactNode[];
             },
           )}
@@ -1309,12 +1357,16 @@ function TemplateTable({
 function ProjectScheduleTable({
   tasks,
   editable,
+  collapsedPillars,
+  onTogglePillar,
   savingTaskId,
   onChange,
   onSave,
 }: {
   tasks: Task[];
   editable: boolean;
+  collapsedPillars: Set<Pillar>;
+  onTogglePillar: (pillar: Pillar) => void;
   savingTaskId: string;
   onChange: (id: string, changes: Partial<Task>) => void;
   onSave: (task: Task) => void;
@@ -1353,195 +1405,203 @@ function ProjectScheduleTable({
                   key={`${pillar}-project-header`}
                   pillar={pillar}
                   colSpan={editable ? 11 : 10}
+                  collapsed={collapsedPillars.has(pillar)}
+                  onToggle={() => onTogglePillar(pillar)}
                 />,
-                ...pillarTasks.map((task) => {
-                  const summary = task.kind === 'group';
-                  return (
-                    <tr
-                      key={task.id}
-                      className={
-                        summary ? 'bg-slate-50/70' : 'hover:bg-slate-50/50'
-                      }
-                    >
-                      <td className="px-3 py-2.5 text-xs font-bold text-[#103f85]">
-                        {task.item}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs">
-                        <TaskName task={task} map={map} />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          <span className="text-xs text-slate-400">—</span>
-                        ) : (
-                          <input
-                            value={task.owner}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, { owner: e.target.value })
-                            }
-                            className={`${fieldClass} w-full`}
-                          />
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          '—'
-                        ) : (
-                          <select
-                            value={task.predecessorId ?? ''}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, {
-                                predecessorId: e.target.value || null,
-                                startDate: e.target.value ? '' : task.startDate,
-                              })
-                            }
-                            className={`${fieldClass} w-full`}
-                          >
-                            <option value="">Sem</option>
-                            {choices
-                              .filter((choice) => choice.id !== task.id)
-                              .map((choice) => (
-                                <option key={choice.id} value={choice.id}>
-                                  {choice.item}
-                                </option>
-                              ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          <span className="text-xs">
-                            {formatDate(task.startDate)}
-                          </span>
-                        ) : (
-                          <input
-                            type="date"
-                            value={task.startDate}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, { startDate: e.target.value })
-                            }
-                            className={`${fieldClass} w-full`}
-                          />
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          <span className="text-xs">
-                            {formatDate(task.endDate)}
-                          </span>
-                        ) : (
-                          <input
-                            type="date"
-                            value={task.endDate}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, { endDate: e.target.value })
-                            }
-                            className={`${fieldClass} w-full`}
-                          />
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          '—'
-                        ) : (
-                          <input
-                            type="number"
-                            min={task.kind === 'milestone' ? 0 : 1}
-                            value={task.durationDays}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, {
-                                durationDays: Number(e.target.value),
-                              })
-                            }
-                            className={`${fieldClass} w-full`}
-                          />
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          <span className="text-xs font-bold">
-                            {task.progress}%
-                          </span>
-                        ) : (
-                          <div className="flex items-center gap-1">
+                ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
+                  (task) => {
+                    const summary = task.kind === 'group';
+                    return (
+                      <tr
+                        key={task.id}
+                        className={
+                          summary ? 'bg-slate-50/70' : 'hover:bg-slate-50/50'
+                        }
+                      >
+                        <td className="px-3 py-2.5 text-xs font-bold text-[#103f85]">
+                          {task.item}
+                        </td>
+                        <td className="px-3 py-2.5 text-xs">
+                          <TaskName task={task} map={map} />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            <span className="text-xs text-slate-400">—</span>
+                          ) : (
                             <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={task.progress}
+                              value={task.owner}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, { owner: e.target.value })
+                              }
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            '—'
+                          ) : (
+                            <select
+                              value={task.predecessorId ?? ''}
                               disabled={!editable}
                               onChange={(e) =>
                                 onChange(task.id, {
-                                  progress: Number(e.target.value),
+                                  predecessorId: e.target.value || null,
+                                  startDate: e.target.value
+                                    ? ''
+                                    : task.startDate,
                                 })
                               }
-                              className={`${fieldClass} w-16`}
-                            />
-                            <span className="text-xs text-slate-400">%</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          <span className="text-xs font-semibold">
-                            {task.status}
-                          </span>
-                        ) : (
-                          <select
-                            value={task.status}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, { status: e.target.value })
-                            }
-                            className={`${fieldClass} w-full`}
-                          >
-                            {statuses.map((status) => (
-                              <option key={status}>{status}</option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {summary ? (
-                          '—'
-                        ) : (
-                          <input
-                            value={task.observation}
-                            disabled={!editable}
-                            onChange={(e) =>
-                              onChange(task.id, { observation: e.target.value })
-                            }
-                            placeholder="Registro do acompanhamento"
-                            className={`${fieldClass} w-full`}
-                          />
-                        )}
-                      </td>
-                      {editable && (
-                        <td className="px-3 py-2.5">
-                          {!summary && (
-                            <Button
-                              size="icon-sm"
-                              variant="outline"
-                              aria-label={`Salvar ${task.item}`}
-                              disabled={savingTaskId === task.id}
-                              onClick={() => onSave(task)}
+                              className={`${fieldClass} w-full`}
                             >
-                              {savingTaskId === task.id ? (
-                                <RefreshCw className="animate-spin" />
-                              ) : (
-                                <Save />
-                              )}
-                            </Button>
+                              <option value="">Sem</option>
+                              {choices
+                                .filter((choice) => choice.id !== task.id)
+                                .map((choice) => (
+                                  <option key={choice.id} value={choice.id}>
+                                    {choice.item}
+                                  </option>
+                                ))}
+                            </select>
                           )}
                         </td>
-                      )}
-                    </tr>
-                  );
-                }),
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            <span className="text-xs">
+                              {formatDate(task.startDate)}
+                            </span>
+                          ) : (
+                            <input
+                              type="date"
+                              value={task.startDate}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, { startDate: e.target.value })
+                              }
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            <span className="text-xs">
+                              {formatDate(task.endDate)}
+                            </span>
+                          ) : (
+                            <input
+                              type="date"
+                              value={task.endDate}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, { endDate: e.target.value })
+                              }
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            '—'
+                          ) : (
+                            <input
+                              type="number"
+                              min={task.kind === 'milestone' ? 0 : 1}
+                              value={task.durationDays}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, {
+                                  durationDays: Number(e.target.value),
+                                })
+                              }
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            <span className="text-xs font-bold">
+                              {task.progress}%
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={task.progress}
+                                disabled={!editable}
+                                onChange={(e) =>
+                                  onChange(task.id, {
+                                    progress: Number(e.target.value),
+                                  })
+                                }
+                                className={`${fieldClass} w-16`}
+                              />
+                              <span className="text-xs text-slate-400">%</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            <span className="text-xs font-semibold">
+                              {task.status}
+                            </span>
+                          ) : (
+                            <select
+                              value={task.status}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, { status: e.target.value })
+                              }
+                              className={`${fieldClass} w-full`}
+                            >
+                              {statuses.map((status) => (
+                                <option key={status}>{status}</option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            '—'
+                          ) : (
+                            <input
+                              value={task.observation}
+                              disabled={!editable}
+                              onChange={(e) =>
+                                onChange(task.id, {
+                                  observation: e.target.value,
+                                })
+                              }
+                              placeholder="Registro do acompanhamento"
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        {editable && (
+                          <td className="px-3 py-2.5">
+                            {!summary && (
+                              <Button
+                                size="icon-sm"
+                                variant="outline"
+                                aria-label={`Salvar ${task.item}`}
+                                disabled={savingTaskId === task.id}
+                                onClick={() => onSave(task)}
+                              >
+                                {savingTaskId === task.id ? (
+                                  <RefreshCw className="animate-spin" />
+                                ) : (
+                                  <Save />
+                                )}
+                              </Button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  },
+                ),
               ] as React.ReactNode[];
             },
           )}
@@ -1551,7 +1611,15 @@ function ProjectScheduleTable({
   );
 }
 
-function GanttView({ tasks }: { tasks: Task[] }) {
+function GanttView({
+  tasks,
+  collapsedPillars,
+  onTogglePillar,
+}: {
+  tasks: Task[];
+  collapsedPillars: Set<Pillar>;
+  onTogglePillar: (pillar: Pillar) => void;
+}) {
   const dated = tasks.filter((task) => task.startDate && task.endDate);
   if (!dated.length)
     return (
@@ -1577,43 +1645,79 @@ function GanttView({ tasks }: { tasks: Task[] }) {
           </div>
         </div>
         <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-          {dated.map((task) => {
-            const start =
-              (Date.parse(`${task.startDate}T12:00:00Z`) - min) / 86_400_000;
-            const length =
-              (Date.parse(`${task.endDate}T12:00:00Z`) -
-                Date.parse(`${task.startDate}T12:00:00Z`)) /
-                86_400_000 +
-              1;
-            const color = pillarMeta[task.pillar].accent;
-            return (
-              <div
-                key={task.id}
-                className="grid min-h-12 grid-cols-[360px_1fr] items-center gap-4 px-3"
-              >
-                <div className="truncate pr-4 text-xs">
-                  <strong className="mr-2 text-[#103f85]">{task.item}</strong>
-                  {task.title}
-                </div>
-                <div className="relative h-6 rounded bg-slate-100">
-                  <div
-                    className="absolute top-1 h-4 min-w-2 rounded"
-                    style={{
-                      left: `${(start / span) * 100}%`,
-                      width: `${Math.max((length / span) * 100, 0.8)}%`,
-                      background: color,
-                      opacity: task.kind === 'group' ? 0.45 : 0.9,
-                    }}
-                  >
-                    <span
-                      className="absolute inset-y-0 left-0 rounded bg-black/20"
-                      style={{ width: `${task.progress}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {(['Empresa', 'Pessoas', 'Equipamentos'] as Pillar[]).flatMap(
+            (pillar) => {
+              const pillarTasks = dated.filter(
+                (task) => task.pillar === pillar,
+              );
+              if (!pillarTasks.length) return [];
+              const meta = pillarMeta[pillar];
+              const Icon = meta.icon;
+              return [
+                <button
+                  key={`${pillar}-gantt-header`}
+                  type="button"
+                  aria-expanded={!collapsedPillars.has(pillar)}
+                  onClick={() => onTogglePillar(pillar)}
+                  className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#103f85]/40"
+                  style={{ color: meta.accent, background: meta.soft }}
+                >
+                  <span className="inline-flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.12em]">
+                    {collapsedPillars.has(pillar) ? (
+                      <ChevronRight size={17} />
+                    ) : (
+                      <ChevronDown size={17} />
+                    )}
+                    <Icon size={17} /> {pillar}
+                  </span>
+                  <span className="text-xs font-bold normal-case tracking-normal">
+                    {collapsedPillars.has(pillar) ? 'Expandir' : 'Recolher'}
+                  </span>
+                </button>,
+                ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
+                  (task) => {
+                    const start =
+                      (Date.parse(`${task.startDate}T12:00:00Z`) - min) /
+                      86_400_000;
+                    const length =
+                      (Date.parse(`${task.endDate}T12:00:00Z`) -
+                        Date.parse(`${task.startDate}T12:00:00Z`)) /
+                        86_400_000 +
+                      1;
+                    return (
+                      <div
+                        key={task.id}
+                        className="grid min-h-12 grid-cols-[360px_1fr] items-center gap-4 px-3"
+                      >
+                        <div className="truncate pr-4 text-xs">
+                          <strong className="mr-2 text-[#103f85]">
+                            {task.item}
+                          </strong>
+                          {task.title}
+                        </div>
+                        <div className="relative h-6 rounded bg-slate-100">
+                          <div
+                            className="absolute top-1 h-4 min-w-2 rounded"
+                            style={{
+                              left: `${(start / span) * 100}%`,
+                              width: `${Math.max((length / span) * 100, 0.8)}%`,
+                              background: meta.accent,
+                              opacity: task.kind === 'group' ? 0.45 : 0.9,
+                            }}
+                          >
+                            <span
+                              className="absolute inset-y-0 left-0 rounded bg-black/20"
+                              style={{ width: `${task.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  },
+                ),
+              ] as React.ReactNode[];
+            },
+          )}
         </div>
       </div>
     </div>
