@@ -44,6 +44,24 @@
 .colorInput input { position:absolute; width:1px; height:1px; opacity:0; }
 .colorInput span { width:24px; height:24px; border:1px solid #26343b26; border-radius:5px; }
 
+/* Identidade Makro: azul institucional para navegação e vermelho para ações principais. */
+.brandLine { display:flex; align-items:center; gap:17px; min-height:36px; }
+.brandLogo { width:auto; height:36px; object-fit:contain; }
+.backLink { color:#103f85; }
+.backLink:hover { color:#ed1c24; }
+.gridHead { background:#103f85; }
+.dayHead span { color:#c9d9f1; }
+.board { background:#9cb6d9; }
+.boardShell { border-color:#b8c7df; }
+.marker { background:#103f85; }
+.legendButton:hover, .legendActive { background:#edf2fb; color:#103f85; }
+.newButton { background:#ed1c24 !important; }
+.newButton:hover { background:#c8161d !important; }
+.dropReady:hover, .dropActive { background:#edf2fb !important; box-shadow:inset 0 0 0 3px #103f85 !important; }
+.dropReady:hover::after, .dropActive::after { border-color:#103f85; background:rgb(237 242 251 / .94); color:#103f85; }
+.buffer strong { color:#103f85; }
+.buffer div i { background:linear-gradient(90deg,#4871ad,#103f85); }
+
 /* Quadro com rolagem própria e referências sempre visíveis. */
 .boardShell { max-height:calc(100vh - 310px); min-height:420px; overflow:auto; }
 .gridHead { position:sticky; top:0; z-index:30; }

@@ -651,13 +651,13 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        {!viewOnly && <a className={styles.backLink} href="/">← Cockpit PMO</a>}
+        <div className={styles.brandLine}>
+          <img src="/makro-logo.png" alt="Makro Engenharia" className={styles.brandLogo} />
+          {!viewOnly && <a className={styles.backLink} href="/">← Cockpit PMO</a>}
+        </div>
         <div className={styles.headContent}>
           <div>
             <h1>Quadro semanal de ações</h1>
-            <p>
-              Organize as ações na janela móvel de acompanhamento.
-            </p>
           </div>
           <div className={styles.headerActions}>
             <div className={styles.searchBox}>
