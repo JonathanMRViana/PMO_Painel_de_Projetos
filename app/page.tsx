@@ -6,7 +6,7 @@ export default function Home() {
       <div className="mx-auto max-w-5xl">
         <header className="flex items-center gap-3">
           <img src="/makro-logo.png" alt="Makro Engenharia" className="h-11 w-auto object-contain" />
-          <p className="border-l border-slate-200 pl-3 text-sm text-slate-500">Diretoria de Operações <span className="font-bold text-[#103f85]">– Gestão de Projetos</span></p>
+          <p className="border-l border-slate-200 pl-3 text-sm font-bold text-[#103f85]">Diretoria de Operações – Gestão de Projetos</p>
         </header>
 
         <section className="mt-14">
