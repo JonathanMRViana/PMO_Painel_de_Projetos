@@ -614,11 +614,6 @@ export function TrackingClient() {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">
               Cronograma padrão de projetos
             </h1>
-            <p className="mt-2 max-w-3xl text-base leading-6 text-slate-600">
-              A estrutura e a numeração vêm do padrão Makro. Em cada projeto,
-              datas, durações, predecessoras, responsáveis, progresso, status e
-              observações podem ser preenchidos sem alterar o modelo.
-            </p>
           </div>
           <div
             className="flex w-fit rounded-xl border border-slate-200 bg-white p-1 shadow-sm"
