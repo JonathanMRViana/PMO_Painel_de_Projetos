@@ -179,7 +179,7 @@ export function TrackingClient() {
   const [authOpen, setAuthOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [pendingAction, setPendingAction] = useState<
-    'project' | 'task' | 'schedule' | null
+    'project' | 'task' | 'schedule' | 'deleteProject' | null
   >(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -187,6 +187,9 @@ export function TrackingClient() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyDraft);
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
+  const [deleteProject, setDeleteProject] = useState<Project | null>(null);
+  const [deleteProjectConfirmation, setDeleteProjectConfirmation] =
+    useState('');
 
   const loadProject = useCallback(async (id: string) => {
     if (!id) {
@@ -281,10 +284,19 @@ export function TrackingClient() {
     setTaskDialogOpen(true);
   }
 
-  function requireAccess(action: 'project' | 'task' | 'schedule') {
+  function openDeleteProject(project: Project) {
+    setDeleteProjectConfirmation('');
+    setDeleteProject(project);
+  }
+
+  function requireAccess(
+    action: 'project' | 'task' | 'schedule' | 'deleteProject',
+  ) {
     if (isEditor) {
       if (action === 'project') setProjectDialogOpen(true);
       if (action === 'task') openNewTask();
+      if (action === 'deleteProject' && selectedProject)
+        openDeleteProject(selectedProject);
       return;
     }
     setPendingAction(action);
@@ -307,6 +319,8 @@ export function TrackingClient() {
       setPassword('');
       if (pendingAction === 'project') setProjectDialogOpen(true);
       if (pendingAction === 'task') openNewTask();
+      if (pendingAction === 'deleteProject' && selectedProject)
+        openDeleteProject(selectedProject);
       setPendingAction(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Senha inválida.');
@@ -490,6 +504,48 @@ export function TrackingClient() {
         reason instanceof Error
           ? reason.message
           : 'Não foi possível excluir a atividade.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDeleteProject() {
+    if (!deleteProject) return;
+    const projectName = deleteProject.name;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const data = await json<{ projects: Project[] }>(
+        await fetch('/api/project-tracking/projects', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: deleteProject.id,
+            confirmationName: deleteProjectConfirmation,
+          }),
+        }),
+      );
+      const nextProjectId = data.projects[0]?.id ?? '';
+      setProjects(data.projects);
+      setSelectedProjectId(nextProjectId);
+      setDeleteProject(null);
+      setDeleteProjectConfirmation('');
+      if (nextProjectId) await loadProject(nextProjectId);
+      else {
+        setSelectedProject(null);
+        setProjectTasks([]);
+        setProjectStartDate('');
+      }
+      setNotice(
+        `Projeto ${projectName} excluído. O padrão Makro não foi alterado.`,
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Não foi possível excluir o projeto.',
       );
     } finally {
       setSaving(false);
@@ -712,6 +768,15 @@ export function TrackingClient() {
                   onClick={() => requireAccess('schedule')}
                 >
                   <KeyRound /> Editar cronograma
+                </Button>
+              )}
+              {view === 'projects' && selectedProject && (
+                <Button
+                  variant="outline"
+                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  onClick={() => requireAccess('deleteProject')}
+                >
+                  <Trash2 /> Excluir projeto
                 </Button>
               )}
               {view === 'template' &&
@@ -1041,6 +1106,53 @@ export function TrackingClient() {
               disabled={saving}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(deleteProject)}
+        onOpenChange={(open) => {
+          if (!open && !saving) {
+            setDeleteProject(null);
+            setDeleteProjectConfirmation('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir projeto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O projeto “{deleteProject?.name}” e todo o seu cronograma serão
+              excluídos permanentemente. O padrão Makro e os demais projetos não
+              serão alterados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="grid gap-2 text-sm font-semibold text-slate-800">
+            Digite {deleteProject?.name} para confirmar
+            <Input
+              value={deleteProjectConfirmation}
+              onChange={(event) =>
+                setDeleteProjectConfirmation(event.target.value)
+              }
+              autoComplete="off"
+              autoFocus
+            />
+          </label>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDeleteProject();
+              }}
+              disabled={
+                saving || deleteProjectConfirmation !== deleteProject?.name
+              }
+            >
+              {saving ? 'Excluindo...' : 'Excluir projeto'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

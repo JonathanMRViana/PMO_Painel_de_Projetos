@@ -277,3 +277,65 @@ export async function PUT(request: Request) {
     return trackingError(error, 'Não foi possível atualizar o cronograma.');
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
+    const body = (await request.json()) as {
+      projectId?: string;
+      confirmationName?: string;
+    };
+    const projectId = body.projectId?.trim() ?? '';
+    const confirmationName = body.confirmationName?.trim() ?? '';
+    if (!projectId)
+      return Response.json(
+        { error: 'Projeto não informado.' },
+        { status: 400 },
+      );
+
+    const db = getDb();
+    const project = await db
+      .prepare('SELECT name FROM project_tracking_projects WHERE id = ?')
+      .bind(projectId)
+      .first<{ name: string }>();
+    if (!project)
+      return Response.json(
+        { error: 'Projeto não encontrado.' },
+        { status: 404 },
+      );
+    if (confirmationName !== project.name)
+      return Response.json(
+        { error: 'Digite o nome exato do projeto para confirmar a exclusão.' },
+        { status: 400 },
+      );
+
+    await db.batch([
+      db
+        .prepare(
+          'DELETE FROM project_tracking_project_tasks WHERE project_id = ?',
+        )
+        .bind(projectId),
+      db
+        .prepare('DELETE FROM project_tracking_projects WHERE id = ?')
+        .bind(projectId),
+    ]);
+
+    const projectsResult = await db
+      .prepare(
+        'SELECT id, name, template_revision, start_date, updated_at, created_at FROM project_tracking_projects ORDER BY created_at DESC, name',
+      )
+      .all();
+    const projects = projectsResult.results.map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+      templateRevision: Number(row.template_revision),
+      startDate: String(row.start_date ?? ''),
+      updatedAt: String(row.updated_at ?? ''),
+      createdAt: String(row.created_at),
+    }));
+    return Response.json({ deletedProjectId: projectId, projects });
+  } catch (error) {
+    return trackingError(error, 'Não foi possível excluir o projeto.');
+  }
+}
