@@ -525,7 +525,6 @@ export function TrackingClient() {
 
   async function confirmDeleteProject() {
     if (!deleteProject) return;
-    const projectName = deleteProject.name;
     setSaving(true);
     setError('');
     setNotice('');
@@ -551,9 +550,6 @@ export function TrackingClient() {
         setProjectTasks([]);
         setProjectStartDate('');
       }
-      setNotice(
-        `Projeto ${projectName} excluído. O padrão Makro não foi alterado.`,
-      );
     } catch (reason) {
       setError(
         reason instanceof Error
