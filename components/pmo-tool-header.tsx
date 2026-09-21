@@ -3,6 +3,13 @@ import { ArrowLeft } from 'lucide-react';
 const publicBase = process.env.PMO_GITHUB_PAGES === '1' ? '/PMO_Painel_de_Projetos' : '';
 import type { ReactNode } from 'react';
 
+function pageHref(path: string) {
+  if (process.env.PMO_GITHUB_PAGES !== '1') return path;
+  const [route, query = ''] = path.split('?');
+  const page = route === '/' ? '/' : `${route.replace(/\/$/, '')}.html`;
+  return `${publicBase}${page}${query ? `?${query}` : ''}`;
+}
+
 type PmoToolHeaderProps = {
   title: string;
   subtitle: string;
@@ -17,7 +24,7 @@ export function PmoToolHeader({ title, subtitle, backHref, children }: PmoToolHe
       <div className="mx-auto flex min-h-[68px] w-full max-w-none items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           {backHref && (
-            <a href={backHref} aria-label="Voltar ao Cockpit" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#103f85]">
+            <a href={pageHref(backHref)} aria-label="Voltar ao Cockpit" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#103f85]">
               <ArrowLeft size={21} strokeWidth={2} />
             </a>
           )}

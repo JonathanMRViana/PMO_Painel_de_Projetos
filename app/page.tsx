@@ -2,6 +2,10 @@ import { CalendarDays, ClipboardList, FolderKanban, Truck } from 'lucide-react';
 
 export const dynamic = 'force-static';
 const publicBase = process.env.PMO_GITHUB_PAGES === '1' ? '/PMO_Painel_de_Projetos' : '';
+const pageHref = (path: string) =>
+  process.env.PMO_GITHUB_PAGES === '1'
+    ? `${publicBase}${path === '/' ? '/' : `${path}.html`}`
+    : path;
 
 export default function Home() {
   return (
@@ -35,7 +39,7 @@ export default function Home() {
           aria-label="Ferramentas disponíveis"
         >
           <a
-            href="/postits"
+            href={pageHref('/postits')}
             className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#edf2fb] text-[#103f85]">
@@ -58,7 +62,7 @@ export default function Home() {
           </a>
 
           <a
-            href="/acompanhamento"
+            href={pageHref('/acompanhamento')}
             className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#edf2fb] text-[#103f85]">
@@ -81,7 +85,7 @@ export default function Home() {
           </a>
 
           <a
-            href="/visao-executiva"
+            href={pageHref('/visao-executiva')}
             className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#edf2fb] text-[#103f85]">
@@ -104,7 +108,7 @@ export default function Home() {
           </a>
 
           <a
-            href="/projetos"
+            href={pageHref('/projetos')}
             className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#edf2fb] text-[#103f85]">
