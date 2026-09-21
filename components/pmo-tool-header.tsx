@@ -1,4 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
+
+const publicBase = process.env.PMO_GITHUB_PAGES === '1' ? '/PMO_Painel_de_Projetos' : '';
 import type { ReactNode } from 'react';
 
 type PmoToolHeaderProps = {
@@ -19,7 +21,7 @@ export function PmoToolHeader({ title, subtitle, backHref, children }: PmoToolHe
               <ArrowLeft size={21} strokeWidth={2} />
             </a>
           )}
-          <img src="/makro-logo.png" alt="Makro Engenharia" className="h-8 w-auto shrink-0 object-contain sm:h-9" />
+          <img src={`${publicBase}/makro-logo.png`} alt="Makro Engenharia" className="h-8 w-auto shrink-0 object-contain sm:h-9" />
           <div className="hidden h-9 w-px shrink-0 bg-slate-200 sm:block" />
           <div className="min-w-0">
             <p className="truncate text-sm font-bold leading-tight text-slate-800">{title}</p>

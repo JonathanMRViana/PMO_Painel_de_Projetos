@@ -19,8 +19,8 @@ export async function POST(request: Request) {
     if (!cookie)
       return Response.json({ error: 'Senha inválida.' }, { status: 401 });
     return Response.json(
-      { authenticated: true },
-      { headers: { 'Set-Cookie': cookie } },
+      { authenticated: true, token: cookie.token },
+      { headers: { 'Set-Cookie': cookie.cookie } },
     );
   } catch {
     return Response.json(

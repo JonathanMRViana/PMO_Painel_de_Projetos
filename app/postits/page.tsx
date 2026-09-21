@@ -1,4 +1,5 @@
 'use client';
+import '@/lib/github-pages-api';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -37,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import styles from './postit-board.module.css';
+export const dynamic = 'force-static';
 type Day = 'seg' | 'ter' | 'qua' | 'qui' | 'sex' | 'd7';
 type Sector = string;
 type Project = string;

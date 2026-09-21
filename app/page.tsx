@@ -1,13 +1,16 @@
 import { CalendarDays, ClipboardList } from 'lucide-react';
 import { ProjectOverviewClient } from './project-overview-client';
 
+export const dynamic = 'force-static';
+const publicBase = process.env.PMO_GITHUB_PAGES === '1' ? '/PMO_Painel_de_Projetos' : '';
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f4f6f7] px-5 py-8 text-slate-900 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-5xl">
         <header className="flex items-center gap-3">
           <img
-            src="/makro-logo.png"
+            src={`${publicBase}/makro-logo.png`}
             alt="Makro Engenharia"
             className="h-11 w-auto object-contain"
           />

@@ -1,4 +1,5 @@
 'use client';
+import '@/lib/github-pages-api';
 
 import { useEffect, useState } from 'react';
 import { CalendarDays, ClipboardList, FolderKanban, Plus } from 'lucide-react';

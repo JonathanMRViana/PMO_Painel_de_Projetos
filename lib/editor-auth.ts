@@ -14,12 +14,26 @@ async function sessionToken() {
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+async function apiToken(expiresAt: number) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret()), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`pmo-editor-api-v1:${expiresAt}`));
+  const encoded = Array.from(new Uint8Array(signature), (value) => value.toString(16).padStart(2, '0')).join('');
+  return `${expiresAt}.${encoded}`;
+}
+
 function readCookie(request: Request, name: string) {
   return request.headers.get('cookie')?.split(';').map((item) => item.trim()).find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1) ?? '';
 }
 
 export async function isEditor(request: Request) {
-  return readCookie(request, cookieName) === await sessionToken();
+  if (readCookie(request, cookieName) === await sessionToken()) return true;
+  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+  const [expiresAtText] = bearer.split('.');
+  const expiresAt = Number(expiresAtText);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now() || expiresAt > Date.now() + 28_800_000) return false;
+  return bearer === await apiToken(expiresAt);
 }
 
 export async function requireEditor(request: Request) {
@@ -29,7 +43,11 @@ export async function requireEditor(request: Request) {
 
 export async function createEditorSession(password: string) {
   if (password !== secret()) return null;
-  return `${cookieName}=${await sessionToken()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`;
+  const expiresAt = Date.now() + 28_800_000;
+  return {
+    cookie: `${cookieName}=${await sessionToken()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`,
+    token: await apiToken(expiresAt),
+  };
 }
 
 export const editorCookieName = cookieName;
