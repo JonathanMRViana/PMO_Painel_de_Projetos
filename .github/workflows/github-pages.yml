@@ -1,5 +1,9 @@
 name: Publicar painel no GitHub Pages
 
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
