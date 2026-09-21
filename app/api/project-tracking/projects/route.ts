@@ -8,7 +8,6 @@ import {
 import { ensureProjectInBoard } from '@/lib/project-hub';
 import { syncScheduleActions } from '@/lib/schedule-action-sync';
 
-const statuses = ['Não iniciado', 'Em andamento', 'Concluído', 'Bloqueado'];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function cleanDate(value: unknown) {
@@ -31,6 +30,19 @@ function daysInclusive(start: string, end: string) {
     (Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) /
     86_400_000;
   return Math.max(1, Math.round(delta) + 1);
+}
+
+function automaticStatus(
+  startDate: string,
+  endDate: string,
+  actualStartDate: string,
+  actualEndDate: string,
+) {
+  if (actualEndDate) return 'Concluído';
+  const today = new Date().toISOString().slice(0, 10);
+  if (actualStartDate) return endDate && endDate < today ? 'Atrasado' : 'Em andamento';
+  if (!startDate && !endDate) return 'Não planejado';
+  return endDate && endDate < today ? 'Atrasado' : 'Não iniciado';
 }
 
 export async function GET(request: Request) {
@@ -60,9 +72,15 @@ export async function GET(request: Request) {
       );
     const tasks = await db
       .prepare(
-        'SELECT id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order FROM project_tracking_project_tasks WHERE project_id = ? ORDER BY sort_order, item',
+        'SELECT id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order FROM project_tracking_project_tasks WHERE project_id = ? ORDER BY sort_order, item',
       )
       .bind(projectId)
+      .all();
+    const actions = await db
+      .prepare(
+        'SELECT id, title, action_date, completed FROM postit_actions WHERE project_code = ? OR lower(project) = lower(?) ORDER BY completed, action_date, title',
+      )
+      .bind(selected.code, selected.name)
       .all();
     return Response.json({
       projects,
@@ -70,6 +88,12 @@ export async function GET(request: Request) {
       tasks: tasks.results.map((row) =>
         rowToTrackingTask(row as Record<string, unknown>),
       ),
+      actions: actions.results.map((row) => ({
+        id: String(row.id),
+        title: String(row.title),
+        actionDate: String(row.action_date ?? ''),
+        completed: Boolean(row.completed),
+      })),
     });
   } catch (error) {
     return trackingError(error, 'Não foi possível carregar os projetos.');
@@ -83,7 +107,74 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       name?: string;
       startDate?: string;
+      projectId?: string;
+      parentId?: string | null;
+      predecessorId?: string | null;
+      pillar?: string;
+      item?: string;
+      title?: string;
+      owner?: string;
+      durationDays?: number;
+      kind?: string;
     };
+    if (body.projectId?.trim()) {
+      const db = getDb();
+      const projectId = body.projectId.trim();
+      const project = await db
+        .prepare('SELECT id FROM project_tracking_projects WHERE id = ?')
+        .bind(projectId)
+        .first();
+      if (!project)
+        return Response.json({ error: 'Projeto não encontrado.' }, { status: 404 });
+      const item = String(body.item ?? '').trim();
+      const title = String(body.title ?? '').trim();
+      if (!item || !title)
+        return Response.json(
+          { error: 'Informe o item e o nome da atividade.' },
+          { status: 400 },
+        );
+      const pillar = ['Empresa', 'Pessoas', 'Equipamentos'].includes(
+        String(body.pillar),
+      )
+        ? String(body.pillar)
+        : 'Empresa';
+      const kind = ['task', 'milestone', 'group'].includes(String(body.kind))
+        ? String(body.kind)
+        : 'task';
+      const taskId = crypto.randomUUID();
+      const order = await db
+        .prepare(
+          'SELECT COALESCE(MAX(sort_order), 0) AS total FROM project_tracking_project_tasks WHERE project_id = ?',
+        )
+        .bind(projectId)
+        .first<{ total: number }>();
+      await db
+        .prepare(
+          'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?)',
+        )
+        .bind(
+          taskId,
+          projectId,
+          `manual:${taskId}`,
+          body.parentId?.trim() || null,
+          pillar,
+          item,
+          title,
+          String(body.owner ?? '').trim(),
+          kind === 'group' ? 0 : Math.max(0, Math.round(Number(body.durationDays ?? 1))),
+          body.predecessorId?.trim() || null,
+          '',
+          '',
+          '',
+          '',
+          'Não planejado',
+          '',
+          kind,
+          Number(order?.total ?? 0) + 1,
+        )
+        .run();
+      return Response.json({ id: taskId }, { status: 201 });
+    }
     const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
     const startDate = cleanDate(body.startDate);
     if (name.length < 2 || name.length > 80)
@@ -176,6 +267,9 @@ export async function PUT(request: Request) {
       predecessorId?: string | null;
       startDate?: string;
       endDate?: string;
+      actualStartDate?: string;
+      actualEndDate?: string;
+      linkedActionId?: string | null;
       progress?: number;
       status?: string;
       observation?: string;
@@ -225,6 +319,9 @@ export async function PUT(request: Request) {
 
     let startDate = cleanDate(body.startDate);
     let endDate = cleanDate(body.endDate);
+    const actualStartDate = cleanDate(body.actualStartDate);
+    const actualEndDate = cleanDate(body.actualEndDate);
+    const linkedActionId = body.linkedActionId?.trim() || null;
     const predecessorId = body.predecessorId?.trim() || null;
     let durationDays = Math.max(0, Math.round(Number(body.durationDays ?? 1)));
     if (predecessorId && !startDate) {
@@ -249,18 +346,23 @@ export async function PUT(request: Request) {
         { error: 'A data de término não pode ser anterior ao início.' },
         { status: 400 },
       );
-    const progress = Math.min(
+    let progress = Math.min(
       100,
       Math.max(0, Math.round(Number(body.progress ?? 0))),
     );
-    let status = String(body.status ?? 'Não iniciado');
-    if (!statuses.includes(status)) status = 'Não iniciado';
-    if (progress === 100) status = 'Concluído';
+    if (actualEndDate) progress = 100;
+    else if (actualStartDate && progress === 0) progress = 1;
+    const status = automaticStatus(
+      startDate,
+      endDate,
+      actualStartDate,
+      actualEndDate,
+    );
 
     await db.batch([
       db
         .prepare(
-          'UPDATE project_tracking_project_tasks SET owner = ?, duration_days = ?, predecessor_id = ?, start_date = ?, end_date = ?, progress = ?, status = ?, observation = ? WHERE id = ? AND project_id = ?',
+          'UPDATE project_tracking_project_tasks SET owner = ?, duration_days = ?, predecessor_id = ?, start_date = ?, end_date = ?, actual_start_date = ?, actual_end_date = ?, linked_action_id = ?, progress = ?, status = ?, observation = ? WHERE id = ? AND project_id = ?',
         )
         .bind(
           String(body.owner ?? '').trim(),
@@ -268,6 +370,9 @@ export async function PUT(request: Request) {
           predecessorId,
           startDate,
           endDate,
+          actualStartDate,
+          actualEndDate,
+          linkedActionId,
           progress,
           status,
           String(body.observation ?? '').trim(),

@@ -15,6 +15,9 @@ export type TrackingTask = {
   predecessorId: string | null;
   startDate: string;
   endDate: string;
+  actualStartDate: string;
+  actualEndDate: string;
+  linkedActionId: string | null;
   progress: number;
   status: string;
   observation: string;
@@ -34,6 +37,11 @@ export function rowToTrackingTask(row: Record<string, unknown>): TrackingTask {
     predecessorId: row.predecessor_id ? String(row.predecessor_id) : null,
     startDate: String(row.start_date ?? ''),
     endDate: String(row.end_date ?? ''),
+    actualStartDate: String(row.actual_start_date ?? ''),
+    actualEndDate: String(row.actual_end_date ?? ''),
+    linkedActionId: row.linked_action_id
+      ? String(row.linked_action_id)
+      : null,
     progress: Number(row.progress ?? 0),
     status: String(row.status ?? 'Não iniciado'),
     observation: String(row.observation ?? ''),

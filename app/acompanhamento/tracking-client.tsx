@@ -55,6 +55,9 @@ type Task = {
   predecessorId: string | null;
   startDate: string;
   endDate: string;
+  actualStartDate: string;
+  actualEndDate: string;
+  linkedActionId: string | null;
   progress: number;
   status: string;
   observation: string;
@@ -69,12 +72,17 @@ type Project = {
   updatedAt: string;
   createdAt: string;
 };
+type BoardAction = {
+  id: string;
+  title: string;
+  actionDate: string;
+  completed: boolean;
+};
 type TaskDraft = Pick<
   Task,
   'id' | 'pillar' | 'item' | 'title' | 'owner' | 'durationDays' | 'kind'
 > & { parentId: string; predecessorId: string };
 
-const statuses = ['Não iniciado', 'Em andamento', 'Concluído', 'Bloqueado'];
 const pillarMeta: Record<
   Pillar,
   { icon: typeof Building2; accent: string; soft: string }
@@ -119,6 +127,15 @@ function formatDate(value: string) {
   );
 }
 
+function automaticTaskStatus(task: Pick<Task, 'startDate' | 'endDate' | 'actualStartDate' | 'actualEndDate'>) {
+  if (task.actualEndDate) return 'Concluído';
+  const today = new Date().toISOString().slice(0, 10);
+  if (task.actualStartDate)
+    return task.endDate && task.endDate < today ? 'Atrasado' : 'Em andamento';
+  if (!task.startDate && !task.endDate) return 'Não planejado';
+  return task.endDate && task.endDate < today ? 'Atrasado' : 'Não iniciado';
+}
+
 function withGroupSummaries(tasks: Task[]) {
   const children = new Map<string, Task[]>();
   for (const task of tasks) {
@@ -140,6 +157,14 @@ function withGroupSummaries(tasks: Task[]) {
       .map((child) => child.endDate)
       .filter(Boolean)
       .sort();
+    const actualStarts = leaves
+      .map((child) => child.actualStartDate)
+      .filter(Boolean)
+      .sort();
+    const actualEnds = leaves
+      .map((child) => child.actualEndDate)
+      .filter(Boolean)
+      .sort();
     const progress = leaves.length
       ? Math.round(
           leaves.reduce((sum, child) => sum + child.progress, 0) /
@@ -150,13 +175,15 @@ function withGroupSummaries(tasks: Task[]) {
       ...task,
       startDate: starts[0] ?? '',
       endDate: ends.at(-1) ?? '',
+      actualStartDate: actualStarts[0] ?? '',
+      actualEndDate: actualEnds.at(-1) ?? '',
       progress,
-      status:
-        progress === 100
-          ? 'Concluído'
-          : progress > 0
-            ? 'Em andamento'
-            : 'Não iniciado',
+      status: automaticTaskStatus({
+        startDate: starts[0] ?? '',
+        endDate: ends.at(-1) ?? '',
+        actualStartDate: actualStarts[0] ?? '',
+        actualEndDate: actualEnds.at(-1) ?? '',
+      }),
     };
   });
 }
@@ -176,6 +203,7 @@ export function TrackingClient() {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [projectActions, setProjectActions] = useState<BoardAction[]>([]);
   const [isEditor, setIsEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -192,6 +220,9 @@ export function TrackingClient() {
   const [projectStartDate, setProjectStartDate] = useState('');
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyDraft);
+  const [taskTarget, setTaskTarget] = useState<'template' | 'project'>(
+    'template',
+  );
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
   const [deleteProject, setDeleteProject] = useState<Project | null>(null);
   const [deleteProjectConfirmation, setDeleteProjectConfirmation] =
@@ -201,12 +232,14 @@ export function TrackingClient() {
     if (!id) {
       setSelectedProject(null);
       setProjectTasks([]);
+      setProjectActions([]);
       return;
     }
     const data = await json<{
       project: Project;
       projects: Project[];
       tasks: Task[];
+      actions: BoardAction[];
     }>(
       await fetch(
         `/api/project-tracking/projects?id=${encodeURIComponent(id)}`,
@@ -219,6 +252,7 @@ export function TrackingClient() {
     setSelectedProject(data.project);
     setProjectStartDate(data.project.startDate);
     setProjectTasks(data.tasks);
+    setProjectActions(data.actions ?? []);
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -295,6 +329,17 @@ export function TrackingClient() {
   );
 
   function openNewTask(parent?: Task) {
+    setTaskTarget('template');
+    setTaskDraft({
+      ...emptyDraft,
+      pillar: parent?.pillar ?? 'Empresa',
+      parentId: parent?.id ?? '',
+    });
+    setTaskDialogOpen(true);
+  }
+
+  function openNewProjectTask(parent?: Task) {
+    setTaskTarget('project');
     setTaskDraft({
       ...emptyDraft,
       pillar: parent?.pillar ?? 'Empresa',
@@ -322,7 +367,8 @@ export function TrackingClient() {
   ) {
     if (isEditor) {
       if (action === 'project') setProjectDialogOpen(true);
-      if (action === 'task') openNewTask();
+      if (action === 'task')
+        view === 'projects' ? openNewProjectTask() : openNewTask();
       if (action === 'deleteProject' && selectedProject)
         openDeleteProject(selectedProject);
       return;
@@ -346,7 +392,8 @@ export function TrackingClient() {
       setAuthOpen(false);
       setPassword('');
       if (pendingAction === 'project') setProjectDialogOpen(true);
-      if (pendingAction === 'task') openNewTask();
+      if (pendingAction === 'task')
+        view === 'projects' ? openNewProjectTask() : openNewTask();
       if (pendingAction === 'deleteProject' && selectedProject)
         openDeleteProject(selectedProject);
       setPendingAction(null);
@@ -457,6 +504,7 @@ export function TrackingClient() {
   }
 
   function openEditTask(task: Task) {
+    setTaskTarget('template');
     setTaskDraft({
       id: task.id,
       parentId: task.parentId ?? '',
@@ -476,6 +524,29 @@ export function TrackingClient() {
     setError('');
     setNotice('');
     try {
+      if (taskTarget === 'project') {
+        if (!selectedProject) throw new Error('Selecione um projeto.');
+        await json(
+          await fetch('/api/project-tracking/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...taskDraft,
+              projectId: selectedProject.id,
+              parentId: taskDraft.parentId || null,
+              predecessorId: taskDraft.predecessorId || null,
+            }),
+          }),
+        );
+        setTaskDialogOpen(false);
+        await loadProject(selectedProject.id);
+        setNotice(
+          taskDraft.kind === 'milestone'
+            ? 'Marco adicionado ao cronograma do projeto.'
+            : 'Atividade adicionada ao cronograma do projeto.',
+        );
+        return;
+      }
       const method = taskDraft.id ? 'PUT' : 'POST';
       const data = await json<{ revision: number; tasks: Task[] }>(
         await fetch('/api/project-tracking/template', {
@@ -588,10 +659,11 @@ export function TrackingClient() {
     }
   }
 
-  const parentChoices = templateTasks.filter(
+  const draftTasks = taskTarget === 'project' ? projectTasks : templateTasks;
+  const parentChoices = draftTasks.filter(
     (task) => task.pillar === taskDraft.pillar && task.id !== taskDraft.id,
   );
-  const predecessorChoices = templateTasks.filter(
+  const predecessorChoices = draftTasks.filter(
     (task) => task.kind !== 'group' && task.id !== taskDraft.id,
   );
 
@@ -751,6 +823,11 @@ export function TrackingClient() {
                   <KeyRound /> Editar cronograma
                 </Button>
               )}
+              {view === 'projects' && selectedProject && isEditor && (
+                <Button onClick={() => requireAccess('task')}>
+                  <Plus /> Nova atividade
+                </Button>
+              )}
               {view === 'projects' && selectedProject && (
                 <Button
                   variant="outline"
@@ -814,6 +891,7 @@ export function TrackingClient() {
           ) : (
             <ProjectScheduleTable
               tasks={displayProjectTasks}
+              actions={projectActions}
               editable={isEditor}
               collapsedPillars={collapsedPillars}
               onTogglePillar={togglePillar}
@@ -919,8 +997,9 @@ export function TrackingClient() {
                   : 'Nova atividade'}
             </DialogTitle>
             <DialogDescription>
-              Esta mudança atualiza o padrão usado por projetos criados daqui em
-              diante.
+              {taskTarget === 'project'
+                ? 'Esta atividade será incluída somente neste projeto.'
+                : 'Esta mudança atualiza o padrão usado por projetos criados daqui em diante.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -974,7 +1053,7 @@ export function TrackingClient() {
               />
             </label>
             <label className="grid gap-2 text-sm font-semibold">
-              Duração padrão (dias)
+              {taskTarget === 'project' ? 'Duração (dias)' : 'Duração padrão (dias)'}
               <Input
                 type="number"
                 min={0}
@@ -1001,7 +1080,7 @@ export function TrackingClient() {
               />
             </label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-              Responsável padrão
+              {taskTarget === 'project' ? 'Responsável' : 'Responsável padrão'}
               <Input
                 value={taskDraft.owner}
                 onChange={(event) =>
@@ -1014,7 +1093,9 @@ export function TrackingClient() {
             </label>
             {!taskDraft.id && (
               <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-                Tarefa principal (opcional)
+                {taskTarget === 'project'
+                  ? 'Tarefa principal (opcional)'
+                  : 'Tarefa principal (opcional)'}
                 <select
                   value={taskDraft.parentId}
                   onChange={(event) =>
@@ -1036,7 +1117,9 @@ export function TrackingClient() {
             )}
             {taskDraft.kind !== 'group' && (
               <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-                Predecessora padrão (opcional)
+                {taskTarget === 'project'
+                  ? 'Predecessora (opcional)'
+                  : 'Predecessora padrão (opcional)'}
                 <select
                   value={taskDraft.predecessorId}
                   onChange={(event) =>
@@ -1333,6 +1416,7 @@ function TemplateTable({
 
 function ProjectScheduleTable({
   tasks,
+  actions,
   editable,
   collapsedPillars,
   onTogglePillar,
@@ -1341,6 +1425,7 @@ function ProjectScheduleTable({
   onSave,
 }: {
   tasks: Task[];
+  actions: BoardAction[];
   editable: boolean;
   collapsedPillars: Set<Pillar>;
   onTogglePillar: (pillar: Pillar) => void;
@@ -1354,18 +1439,21 @@ function ProjectScheduleTable({
     'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1424px] table-fixed text-left">
+      <table className="w-full min-w-[1880px] table-fixed text-left">
         <thead className="bg-slate-50 text-xs text-slate-500">
           <tr>
             <th className="w-[72px] px-3 py-3">Item</th>
             <th className="w-[280px] px-3 py-3">Atividade</th>
             <th className="w-[136px] px-3 py-3">Responsável</th>
             <th className="w-[104px] px-3 py-3">Predecessora</th>
-            <th className="w-32 px-3 py-3">Início</th>
-            <th className="w-32 px-3 py-3">Término</th>
+            <th className="w-32 px-3 py-3">Início previsto</th>
+            <th className="w-32 px-3 py-3">Término previsto</th>
+            <th className="w-32 px-3 py-3">Início real</th>
+            <th className="w-32 px-3 py-3">Término real</th>
             <th className="w-16 px-3 py-3">Dias</th>
             <th className="w-24 px-3 py-3">Progresso</th>
             <th className="w-[136px] px-3 py-3">Status</th>
+            <th className="w-[196px] px-3 py-3">Ação vinculada</th>
             <th className="w-[216px] px-3 py-3">Observação</th>
             {editable && <th className="w-16 px-3 py-3"></th>}
           </tr>
@@ -1381,7 +1469,7 @@ function ProjectScheduleTable({
                 <PillarRow
                   key={`${pillar}-project-header`}
                   pillar={pillar}
-                  colSpan={editable ? 11 : 10}
+                  colSpan={editable ? 14 : 13}
                   collapsed={collapsedPillars.has(pillar)}
                   onToggle={() => onTogglePillar(pillar)}
                 />,
@@ -1479,6 +1567,32 @@ function ProjectScheduleTable({
                         </td>
                         <td className="px-3 py-2.5">
                           {summary ? (
+                            <span className="text-xs">{formatDate(task.actualStartDate)}</span>
+                          ) : (
+                            <input
+                              type="date"
+                              value={task.actualStartDate}
+                              disabled={!editable}
+                              onChange={(e) => onChange(task.id, { actualStartDate: e.target.value })}
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            <span className="text-xs">{formatDate(task.actualEndDate)}</span>
+                          ) : (
+                            <input
+                              type="date"
+                              value={task.actualEndDate}
+                              disabled={!editable}
+                              onChange={(e) => onChange(task.id, { actualEndDate: e.target.value })}
+                              className={`${fieldClass} w-full`}
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
                             '—'
                           ) : (
                             <input
@@ -1525,16 +1639,31 @@ function ProjectScheduleTable({
                               {task.status}
                             </span>
                           ) : (
+                            <span className="text-xs font-semibold text-slate-700">
+                              {automaticTaskStatus(task)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {summary ? (
+                            '—'
+                          ) : (
                             <select
-                              value={task.status}
+                              value={task.linkedActionId ?? ''}
                               disabled={!editable}
                               onChange={(e) =>
-                                onChange(task.id, { status: e.target.value })
+                                onChange(task.id, {
+                                  linkedActionId: e.target.value || null,
+                                })
                               }
                               className={`${fieldClass} w-full`}
                             >
-                              {statuses.map((status) => (
-                                <option key={status}>{status}</option>
+                              <option value="">Sem vínculo</option>
+                              {actions.map((action) => (
+                                <option key={action.id} value={action.id}>
+                                  {action.completed ? 'Concluída · ' : ''}
+                                  {action.title} · {formatDate(action.actionDate)}
+                                </option>
                               ))}
                             </select>
                           )}
