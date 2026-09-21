@@ -72,8 +72,7 @@ export function ProjectOverviewClient() {
 
   return (
     <section className="mt-9">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-xl font-bold text-slate-800">Projetos</h2><p className="mt-1 text-sm text-slate-600">Cada pasta reúne o cronograma e as ações do projeto.</p></div>
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
         {editor && <Button onClick={() => setOpen(true)}><Plus /> Novo projeto</Button>}
       </div>
       {projects.length === 0 ? (
