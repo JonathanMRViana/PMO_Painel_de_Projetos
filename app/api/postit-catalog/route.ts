@@ -1,5 +1,6 @@
 import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
+import { ensureProjectInBoard, ensureProjectRecord } from '@/lib/project-hub';
 
 const defaultProjects = [
   ['AMP', '#d9c7f3'],
@@ -98,12 +99,11 @@ export async function POST(request: Request) {
       .bind(type, name)
       .first();
     if (duplicate) throw new Error('Este cadastro já existe.');
-    const item = {
-      id: crypto.randomUUID(),
-      type,
-      name,
-      color: type === 'project' ? body.color || '#d8e5e5' : null,
-    };
+    if (type === 'project') {
+      const project = await ensureProjectInBoard(name, body.color || '#d8e5e5');
+      return Response.json({ item: { id: project.id, type, name: project.name, color: project.color, code: project.code } }, { status: 201 });
+    }
+    const item = { id: crypto.randomUUID(), type, name, color: null };
     await getDb()
       .prepare(
         'INSERT INTO postit_board_catalog (id, type, name, color) VALUES (?, ?, ?, ?)',
@@ -143,12 +143,15 @@ export async function PUT(request: Request) {
       ? [
           db.prepare('UPDATE postit_board_catalog SET name = ?, color = ? WHERE type = ? AND name = ?').bind(name, color, type, oldName),
           db.prepare('UPDATE postit_actions SET project = ? WHERE project = ?').bind(name, oldName),
+          db.prepare('UPDATE project_tracking_projects SET name = ? WHERE name = ?').bind(name, oldName),
+          db.prepare('UPDATE pmo_projects SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE lower(name) = lower(?)').bind(name, color, oldName),
         ]
       : [
           db.prepare('UPDATE postit_board_catalog SET name = ? WHERE type = ? AND name = ?').bind(name, type, oldName),
           db.prepare('UPDATE postit_actions SET sector = ? WHERE sector = ?').bind(name, oldName),
         ]);
-    return Response.json({ item: { type, name, color }, oldName });
+    const project = type === 'project' ? await ensureProjectRecord(name, color || '#d8e5e5') : null;
+    return Response.json({ item: { type, name, color, code: project?.code }, oldName });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar o cadastro.' }, { status: 400 });
   }

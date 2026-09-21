@@ -17,6 +17,7 @@ export const postitActions = sqliteTable(
     boardDay: text('board_day').notNull(),
     sector: text('sector').notNull(),
     project: text('project').notNull(),
+    projectCode: text('project_code').notNull().default(''),
     status: text('status').notNull(),
     criticality: text('criticality').notNull().default('Médio'),
     completed: integer('completed', { mode: 'boolean' })
@@ -102,12 +103,29 @@ export const projectTrackingProjects = sqliteTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
+    projectCode: text('project_code').notNull().default(''),
     templateRevision: integer('template_revision').notNull(),
     startDate: text('start_date').notNull().default(''),
     updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
     createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
   },
   (table) => [uniqueIndex('idx_project_tracking_projects_name').on(table.name)],
+);
+
+export const pmoProjects = sqliteTable(
+  'pmo_projects',
+  {
+    id: text('id').primaryKey(),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    color: text('color').notNull().default('#d8e5e5'),
+    createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
+    updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
+  },
+  (table) => [
+    uniqueIndex('idx_pmo_projects_code').on(table.code),
+    uniqueIndex('idx_pmo_projects_name').on(table.name),
+  ],
 );
 
 export const projectTrackingProjectTasks = sqliteTable(

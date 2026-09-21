@@ -39,12 +39,13 @@ export async function GET(request: Request) {
     const projectId = new URL(request.url).searchParams.get('id');
     const projectsResult = await db
       .prepare(
-        'SELECT id, name, template_revision, start_date, updated_at, created_at FROM project_tracking_projects ORDER BY created_at DESC, name',
+        'SELECT id, name, project_code, template_revision, start_date, updated_at, created_at FROM project_tracking_projects ORDER BY created_at DESC, name',
       )
       .all();
     const projects = projectsResult.results.map((row) => ({
       id: String(row.id),
       name: String(row.name),
+      code: String(row.project_code || ''),
       templateRevision: Number(row.template_revision),
       startDate: String(row.start_date ?? ''),
       updatedAt: String(row.updated_at ?? ''),
@@ -98,11 +99,12 @@ export async function POST(request: Request) {
     const statements = [
       db
         .prepare(
-          'INSERT INTO project_tracking_projects (id, name, template_revision, start_date, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO project_tracking_projects (id, name, project_code, template_revision, start_date, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
         .bind(
           projectId,
           name,
+          '',
           template.revision,
           startDate,
           createdAt,
@@ -139,13 +141,15 @@ export async function POST(request: Request) {
       }),
     ];
     await db.batch(statements);
-    await ensureProjectInBoard(name);
-    if (startDate) await syncScheduleActions(projectId, name);
+    const hubProject = await ensureProjectInBoard(name);
+    await db.prepare('UPDATE project_tracking_projects SET project_code = ? WHERE id = ?').bind(hubProject.code, projectId).run();
+    if (startDate) await syncScheduleActions(projectId, name, hubProject.code);
     return Response.json(
       {
         project: {
           id: projectId,
           name,
+          code: hubProject.code,
           templateRevision: template.revision,
           startDate,
           updatedAt: createdAt,
@@ -277,10 +281,10 @@ export async function PUT(request: Request) {
         .bind(updatedAt, projectId),
     ]);
     const project = await db
-      .prepare('SELECT name FROM project_tracking_projects WHERE id = ?')
+      .prepare('SELECT name, project_code FROM project_tracking_projects WHERE id = ?')
       .bind(projectId)
-      .first<{ name: string }>();
-    if (project) await syncScheduleActions(projectId, project.name);
+      .first<{ name: string; project_code: string }>();
+    if (project) await syncScheduleActions(projectId, project.name, project.project_code);
     return Response.json({ updatedAt });
   } catch (error) {
     return trackingError(error, 'Não foi possível atualizar o cronograma.');
@@ -332,12 +336,13 @@ export async function DELETE(request: Request) {
 
     const projectsResult = await db
       .prepare(
-        'SELECT id, name, template_revision, start_date, updated_at, created_at FROM project_tracking_projects ORDER BY created_at DESC, name',
+        'SELECT id, name, project_code, template_revision, start_date, updated_at, created_at FROM project_tracking_projects ORDER BY created_at DESC, name',
       )
       .all();
     const projects = projectsResult.results.map((row) => ({
       id: String(row.id),
       name: String(row.name),
+      code: String(row.project_code || ''),
       templateRevision: Number(row.template_revision),
       startDate: String(row.start_date ?? ''),
       updatedAt: String(row.updated_at ?? ''),

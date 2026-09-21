@@ -1,5 +1,6 @@
 import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
+import { ensureProjectRecord } from '@/lib/project-hub';
 
 const days = ['seg', 'ter', 'qua', 'qui', 'sex', 'd7'];
 const criticalities = ['Baixo', 'Médio', 'Alto', 'Crítico'];
@@ -52,6 +53,7 @@ function rowToAction(row: Record<string, unknown>) {
     day: String(row.board_day),
     sector: String(row.sector),
     project: String(row.project),
+    projectCode: String(row.project_code ?? ''),
     criticality: String(row.criticality ?? 'Médio'),
     completed: Boolean(row.completed),
     createdAt: String(row.created_at ?? ''),
@@ -77,7 +79,7 @@ export async function GET(request: Request) {
     }
     const r = await getDb()
       .prepare(
-        'SELECT id, title, observation, owner, action_date, board_day, sector, project, criticality, completed, created_at FROM postit_actions ORDER BY sector, board_day, action_date, created_at',
+        'SELECT id, title, observation, owner, action_date, board_day, sector, project, project_code, criticality, completed, created_at FROM postit_actions ORDER BY sector, board_day, action_date, created_at',
       )
       .all();
     return Response.json({
@@ -94,10 +96,11 @@ export async function POST(request: Request) {
     const denied = await requireEditor(request);
     if (denied) return denied;
     const a = clean((await request.json()) as Payload);
+    const project = await ensureProjectRecord(a.project);
     const createdAt = new Date().toISOString();
     await getDb()
       .prepare(
-        'INSERT INTO postit_actions (id, title, observation, owner, action_date, board_day, sector, project, status, criticality, completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO postit_actions (id, title, observation, owner, action_date, board_day, sector, project, project_code, status, criticality, completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .bind(
         a.id,
@@ -108,6 +111,7 @@ export async function POST(request: Request) {
         a.day,
         a.sector,
         a.project,
+        project.code,
         'No prazo',
         a.criticality,
         a.completed ? 1 : 0,
@@ -115,7 +119,7 @@ export async function POST(request: Request) {
         createdAt,
       )
       .run();
-    return Response.json({ action: { ...a, createdAt } }, { status: 201 });
+    return Response.json({ action: { ...a, projectCode: project.code, createdAt } }, { status: 201 });
   } catch (e) {
     return fail(e);
   }
@@ -125,11 +129,12 @@ export async function PUT(request: Request) {
     const denied = await requireEditor(request);
     if (denied) return denied;
     const a = clean((await request.json()) as Payload);
+    const project = await ensureProjectRecord(a.project);
     const db = getDb();
     const before = await db.prepare('SELECT action_date, created_at FROM postit_actions WHERE id = ?').bind(a.id).first<{ action_date: string; created_at: string }>();
     const r = await db
       .prepare(
-        'UPDATE postit_actions SET title = ?, observation = ?, owner = ?, action_date = ?, board_day = ?, sector = ?, project = ?, criticality = ?, completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE postit_actions SET title = ?, observation = ?, owner = ?, action_date = ?, board_day = ?, sector = ?, project = ?, project_code = ?, criticality = ?, completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       )
       .bind(
         a.title,
@@ -139,6 +144,7 @@ export async function PUT(request: Request) {
         a.day,
         a.sector,
         a.project,
+        project.code,
         a.criticality,
         a.completed ? 1 : 0,
         a.id,
@@ -149,7 +155,7 @@ export async function PUT(request: Request) {
     if (before && before.action_date !== a.date) {
       await db.prepare('INSERT INTO postit_action_date_history (id, action_id, previous_date, new_date, changed_at) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), a.id, before.action_date, a.date, new Date().toISOString()).run();
     }
-    return Response.json({ action: { ...a, createdAt: before?.created_at ?? '' } });
+    return Response.json({ action: { ...a, projectCode: project.code, createdAt: before?.created_at ?? '' } });
   } catch (e) {
     return fail(e);
   }
