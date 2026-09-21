@@ -14,7 +14,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Save,
   Settings2,
   Table2,
   Trash2,
@@ -486,9 +485,7 @@ export function TrackingClient() {
         }),
       );
       await loadProject(selectedProject.id);
-      setNotice(
-        'Data inicial do projeto atualizada. As datas das atividades permanecem preservadas.',
-      );
+      setNotice('Data inicial do projeto salva automaticamente.');
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -842,17 +839,17 @@ export function TrackingClient() {
         </section>
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-end justify-start gap-4 border-b border-slate-200 px-5 py-4">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 xl:flex-row xl:items-end xl:justify-between">
             {view === 'projects' ? (
-              <div className="flex min-w-0 flex-wrap items-end justify-start gap-3">
-                <div>
+              <div className="flex min-w-0 flex-wrap items-end gap-3">
+                <div className="flex h-10 items-center whitespace-nowrap">
                   <h2 className="text-lg font-bold">Cronograma do projeto</h2>
                 </div>
                 {projects.length > 0 && (
                   <select
                     value={selectedProjectId}
                     onChange={(event) => void selectProject(event.target.value)}
-                    className="h-10 min-w-56 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-[#103f85] focus:ring-2 focus:ring-[#103f85]/20"
+                    className="h-10 w-56 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-[#103f85] focus:ring-2 focus:ring-[#103f85]/20"
                   >
                     {projects.map((project) => (
                       <option key={project.id} value={project.id}>
@@ -862,30 +859,21 @@ export function TrackingClient() {
                   </select>
                 )}
                 {selectedProject && (
-                  <div className="flex items-end gap-2">
-                    <label className="grid gap-1 text-xs font-bold text-slate-500">
-                      Início do projeto
-                      <input
-                        type="date"
-                        value={projectStartDate}
-                        disabled={!isEditor}
-                        onChange={(event) =>
-                          setProjectStartDate(event.target.value)
-                        }
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 disabled:bg-slate-50"
-                      />
-                    </label>
-                    {isEditor && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void saveProjectStart()}
-                        disabled={saving}
-                      >
-                        <Save /> Salvar
-                      </Button>
-                    )}
-                  </div>
+                  <label className="grid gap-1 text-xs font-bold text-slate-500">
+                    Início do projeto
+                    <input
+                      type="date"
+                      value={projectStartDate}
+                      disabled={!isEditor}
+                      onChange={(event) =>
+                        setProjectStartDate(event.target.value)
+                      }
+                      onBlur={() => {
+                        if (isEditor) void saveProjectStart();
+                      }}
+                      className="h-10 w-36 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 disabled:bg-slate-50"
+                    />
+                  </label>
                 )}
               </div>
             ) : (
@@ -893,7 +881,7 @@ export function TrackingClient() {
                 <h2 className="text-lg font-bold">Padrão Makro editável</h2>
               </div>
             )}
-            <div className="flex flex-wrap items-center justify-start gap-2">
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               {view === 'projects' && selectedProject && isEditor && (
                 <div className="flex rounded-lg border border-slate-200 p-1">
                   <button
