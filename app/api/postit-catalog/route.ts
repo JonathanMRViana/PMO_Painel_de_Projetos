@@ -36,6 +36,19 @@ async function ensureDefaults() {
       db.prepare("UPDATE postit_board_catalog SET color = ? WHERE type = 'project' AND upper(name) = 'RNEST'")
         .bind('#9bcf9e'),
     ]);
+    // Todo projeto já criado no Cockpit também deve estar disponível como filtro no quadro.
+    const hubProjects = await db
+      .prepare('SELECT name, color FROM pmo_projects')
+      .all<{ name: string; color: string | null }>();
+    await db.batch(
+      hubProjects.results.map((project) =>
+        db
+          .prepare(
+            "INSERT OR IGNORE INTO postit_board_catalog (id, type, name, color, created_at) VALUES (?, 'project', ?, ?, CURRENT_TIMESTAMP)",
+          )
+          .bind(crypto.randomUUID(), project.name, project.color || '#d8e5e5'),
+      ),
+    );
     return;
   }
   const statements = [
