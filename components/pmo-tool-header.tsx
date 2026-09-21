@@ -14,7 +14,7 @@ export function PmoToolHeader({ title, subtitle, backHref, children }: PmoToolHe
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="h-3 bg-[#303030]" />
-      <div className="mx-auto flex min-h-[68px] max-w-[1680px] items-center justify-between gap-4 px-5 py-3 sm:px-8">
+      <div className="mx-auto flex min-h-[68px] w-full max-w-none items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           {backHref && (
             <a href={backHref} aria-label="Voltar ao Cockpit" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#103f85]">

@@ -772,7 +772,7 @@ export function TrackingClient() {
         )}
       </PmoToolHeader>
 
-      <div className="mx-auto max-w-[1560px] px-5 py-7 sm:px-8">
+      <div className="mx-auto w-full max-w-none px-3 py-7 sm:px-5">
         <section className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#ed1c24]">
@@ -1698,22 +1698,22 @@ function ProjectScheduleTable({
     'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1880px] table-fixed text-left">
+      <table className="w-full min-w-[1760px] table-fixed text-left">
         <thead className="bg-slate-50 text-xs text-slate-500">
           <tr>
-            <th className="w-[72px] px-3 py-3">Item</th>
-            <th className="w-[280px] px-3 py-3">Atividade</th>
-            <th className="w-[136px] px-3 py-3">Responsável</th>
-            <th className="w-[104px] px-3 py-3">Predecessora</th>
-            <th className="w-32 px-3 py-3">Início previsto</th>
-            <th className="w-32 px-3 py-3">Término previsto</th>
-            <th className="w-32 px-3 py-3">Início real</th>
-            <th className="w-32 px-3 py-3">Término real</th>
-            <th className="w-16 px-3 py-3">Dias</th>
-            <th className="w-24 px-3 py-3">Progresso</th>
-            <th className="w-[136px] px-3 py-3">Status</th>
-            <th className="w-[196px] px-3 py-3">Ação vinculada</th>
-            <th className="w-[216px] px-3 py-3">Observação</th>
+            <th className="w-[60px] px-2 py-3">Item</th>
+            <th className="w-[228px] px-2 py-3">Atividade</th>
+            <th className="w-[112px] px-2 py-3">Responsável</th>
+            <th className="w-[90px] px-2 py-3">Predecessora</th>
+            <th className="w-[112px] px-2 py-3">Início previsto</th>
+            <th className="w-[112px] px-2 py-3">Término previsto</th>
+            <th className="w-[112px] px-2 py-3">Início real</th>
+            <th className="w-[112px] px-2 py-3">Término real</th>
+            <th className="w-[54px] px-2 py-3">Dias</th>
+            <th className="w-[80px] px-2 py-3">Progresso</th>
+            <th className="w-[108px] px-2 py-3">Status</th>
+            <th className="w-[166px] px-2 py-3">Ação vinculada</th>
+            <th className="w-[176px] px-2 py-3">Observação</th>
           </tr>
         </thead>
         <tbody
