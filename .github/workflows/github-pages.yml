@@ -30,6 +30,9 @@ jobs:
       - run: npm run build
         env:
           PMO_GITHUB_PAGES: '1'
+      - run: |
+          cp -R dist/client/PMO_Painel_de_Projetos/_next dist/client/_next
+          rm -rf dist/client/PMO_Painel_de_Projetos
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
