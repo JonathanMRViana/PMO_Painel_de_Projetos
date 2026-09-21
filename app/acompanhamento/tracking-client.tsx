@@ -1,4 +1,5 @@
 'use client';
+import '@/lib/github-pages-api';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -672,9 +673,9 @@ export function TrackingClient() {
         </section>
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="grid gap-4 border-b border-slate-200 px-5 py-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
+          <div className="flex flex-wrap items-end justify-start gap-4 border-b border-slate-200 px-5 py-4">
             {view === 'projects' ? (
-              <div className="flex min-w-0 flex-wrap items-end justify-center gap-3 md:col-start-2 md:justify-self-center">
+              <div className="flex min-w-0 flex-wrap items-end justify-start gap-3">
                 <div>
                   <h2 className="text-lg font-bold">Cronograma do projeto</h2>
                 </div>
@@ -1351,20 +1352,20 @@ function ProjectScheduleTable({
     'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1880px] text-left">
+      <table className="w-full min-w-[1424px] table-fixed text-left">
         <thead className="bg-slate-50 text-xs text-slate-500">
           <tr>
-            <th className="w-24 px-3 py-3">Item</th>
-            <th className="w-[360px] px-3 py-3">Atividade</th>
-            <th className="w-44 px-3 py-3">Responsável</th>
-            <th className="w-32 px-3 py-3">Predecessora</th>
-            <th className="w-36 px-3 py-3">Início</th>
-            <th className="w-36 px-3 py-3">Término</th>
-            <th className="w-20 px-3 py-3">Dias</th>
-            <th className="w-28 px-3 py-3">Progresso</th>
-            <th className="w-40 px-3 py-3">Status</th>
-            <th className="min-w-64 px-3 py-3">Observação</th>
-            {editable && <th className="w-20 px-3 py-3"></th>}
+            <th className="w-[72px] px-3 py-3">Item</th>
+            <th className="w-[280px] px-3 py-3">Atividade</th>
+            <th className="w-[136px] px-3 py-3">Responsável</th>
+            <th className="w-[104px] px-3 py-3">Predecessora</th>
+            <th className="w-32 px-3 py-3">Início</th>
+            <th className="w-32 px-3 py-3">Término</th>
+            <th className="w-16 px-3 py-3">Dias</th>
+            <th className="w-24 px-3 py-3">Progresso</th>
+            <th className="w-[136px] px-3 py-3">Status</th>
+            <th className="w-[216px] px-3 py-3">Observação</th>
+            {editable && <th className="w-16 px-3 py-3"></th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
