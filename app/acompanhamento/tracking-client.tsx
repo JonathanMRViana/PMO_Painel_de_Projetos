@@ -596,7 +596,7 @@ export function TrackingClient() {
 
   return (
     <main className="min-h-screen bg-[#f4f6f7] text-slate-900">
-      <PmoToolHeader title="Project padrão Makro" subtitle="Cronograma de mobilização" backHref="/">
+      <PmoToolHeader title="Cronograma padrão de projetos" subtitle="Acompanhamento geral de projetos" backHref="/">
         <Button size="lg" onClick={() => requireAccess('project')}>
           <Plus /> Novo projeto
         </Button>
