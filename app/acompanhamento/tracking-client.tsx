@@ -708,10 +708,6 @@ export function TrackingClient() {
             ) : (
               <div>
                 <h2 className="text-lg font-bold">Padrão Makro editável</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Revisão {revision}. Mudanças estruturais valem para projetos
-                  novos.
-                </p>
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
