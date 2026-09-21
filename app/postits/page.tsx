@@ -659,7 +659,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   }
   return (
     <>
-      <PmoToolHeader title="Quadro de ações" subtitle="Acompanhamento semanal" backHref={viewOnly ? undefined : '/'} />
+      <PmoToolHeader title="Quadro de ações" subtitle="Acompanhamento semanal" backHref="/" />
     <main className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headContent}>
@@ -694,7 +694,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 <Plus /> Nova ação
               </Button>
             </>}
-            {!viewOnly && !editorMode && <Button className={styles.newButton} onClick={() => setLoginOpen(true)}>Acessar edição</Button>}
+            {viewOnly ? <a href={`/postits?projeto=${encodeURIComponent(selectedProject || '')}`} className={styles.newButton}>Acessar edição</a> : !editorMode && <Button className={styles.newButton} onClick={() => setLoginOpen(true)}>Acessar edição</Button>}
           </div>
         </div>
         {error && (
