@@ -598,9 +598,11 @@ export function TrackingClient() {
   return (
     <main className="min-h-screen bg-[#f4f6f7] text-slate-900">
       <PmoToolHeader title="Cronograma padrão de projetos" subtitle="Acompanhamento geral de projetos" backHref="/">
-        <Button size="lg" onClick={() => requireAccess('project')}>
-          <Plus /> Novo projeto
-        </Button>
+        {isEditor ? (
+          <Button size="lg" onClick={() => requireAccess('project')}><Plus /> Novo projeto</Button>
+        ) : (
+          <Button size="lg" variant="outline" onClick={() => requireAccess('project')}><KeyRound /> Acessar edição</Button>
+        )}
       </PmoToolHeader>
 
       <div className="mx-auto max-w-[1560px] px-5 py-7 sm:px-8">
@@ -720,12 +722,12 @@ export function TrackingClient() {
                 )}
               </div>
             ) : (
-              <div className="text-center md:col-start-2 md:justify-self-center">
+              <div>
                 <h2 className="text-lg font-bold">Padrão Makro editável</h2>
               </div>
             )}
-            <div className="flex flex-wrap items-center justify-center gap-2 md:col-start-3 md:justify-self-end">
-              {view === 'projects' && selectedProject && (
+            <div className="flex flex-wrap items-center justify-start gap-2">
+              {view === 'projects' && selectedProject && isEditor && (
                 <div className="flex rounded-lg border border-slate-200 p-1">
                   <button
                     onClick={() => setProjectMode('schedule')}
