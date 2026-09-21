@@ -235,7 +235,6 @@ export function TrackingClient() {
   const [isEditor, setIsEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingTaskId, setSavingTaskId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [authOpen, setAuthOpen] = useState(false);
@@ -509,7 +508,6 @@ export function TrackingClient() {
 
   async function saveProjectTask(task: Task) {
     if (!selectedProject) return;
-    setSavingTaskId(task.id);
     setError('');
     setNotice('');
     try {
@@ -525,15 +523,13 @@ export function TrackingClient() {
         }),
       );
       await loadProject(selectedProject.id);
-      setNotice(`${task.item} salva no cronograma do projeto.`);
+      setNotice('Alterações salvas automaticamente.');
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
           : 'Não foi possível salvar a atividade.',
       );
-    } finally {
-      setSavingTaskId('');
     }
   }
 
@@ -994,7 +990,6 @@ export function TrackingClient() {
               editable={isEditor}
               collapsedPillars={collapsedPillars}
               onTogglePillar={togglePillar}
-              savingTaskId={savingTaskId}
               onChange={patchProjectTask}
               onSave={saveProjectTask}
               onCreateAction={openCreateLinkedAction}
@@ -1665,7 +1660,6 @@ function ProjectScheduleTable({
   editable,
   collapsedPillars,
   onTogglePillar,
-  savingTaskId,
   onChange,
   onSave,
   onCreateAction,
@@ -1675,7 +1669,6 @@ function ProjectScheduleTable({
   editable: boolean;
   collapsedPillars: Set<Pillar>;
   onTogglePillar: (pillar: Pillar) => void;
-  savingTaskId: string;
   onChange: (id: string, changes: Partial<Task>) => void;
   onSave: (task: Task) => void;
   onCreateAction: (task: Task) => void;
@@ -1721,10 +1714,21 @@ function ProjectScheduleTable({
             <th className="w-[136px] px-3 py-3">Status</th>
             <th className="w-[196px] px-3 py-3">Ação vinculada</th>
             <th className="w-[216px] px-3 py-3">Observação</th>
-            {editable && <th className="w-16 px-3 py-3"></th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody
+          className="divide-y divide-slate-100"
+          onBlur={(event) => {
+            if (!editable) return;
+            const row = (event.target as HTMLElement).closest<HTMLTableRowElement>(
+              'tr[data-task-id]',
+            );
+            const next = event.relatedTarget as Node | null;
+            if (!row || (next && row.contains(next))) return;
+            const task = tasks.find((item) => item.id === row.dataset.taskId);
+            if (task && task.kind !== 'group') onSave(task);
+          }}
+        >
           {(['Empresa', 'Pessoas', 'Equipamentos'] as Pillar[]).flatMap(
             (pillar) => {
               const pillarTasks = tasks
@@ -1735,7 +1739,7 @@ function ProjectScheduleTable({
                 <PillarRow
                   key={`${pillar}-project-header`}
                   pillar={pillar}
-                  colSpan={editable ? 14 : 13}
+                  colSpan={13}
                   collapsed={collapsedPillars.has(pillar)}
                   onToggle={() => onTogglePillar(pillar)}
                   plannedRange={plannedRange(pillar)}
@@ -1746,6 +1750,7 @@ function ProjectScheduleTable({
                     return (
                       <tr
                         key={task.id}
+                        data-task-id={task.id}
                         className={
                           summary ? 'bg-slate-50/70' : 'hover:bg-slate-50/50'
                         }
@@ -1963,25 +1968,6 @@ function ProjectScheduleTable({
                             />
                           )}
                         </td>
-                        {editable && (
-                          <td className="px-3 py-2.5">
-                            {!summary && (
-                              <Button
-                                size="icon-sm"
-                                variant="outline"
-                                aria-label={`Salvar ${task.item}`}
-                                disabled={savingTaskId === task.id}
-                                onClick={() => onSave(task)}
-                              >
-                                {savingTaskId === task.id ? (
-                                  <RefreshCw className="animate-spin" />
-                                ) : (
-                                  <Save />
-                                )}
-                              </Button>
-                            )}
-                          </td>
-                        )}
                       </tr>
                     );
                   },
