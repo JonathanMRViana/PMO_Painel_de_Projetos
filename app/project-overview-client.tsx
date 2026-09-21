@@ -64,8 +64,14 @@ export function ProjectOverviewClient() {
           <div className="flex items-start gap-3"><span className="mt-1 h-4 w-4 shrink-0 rounded" style={{ backgroundColor: project.color }} /><div className="min-w-0"><h3 className="truncate text-base font-bold text-slate-800">{project.name}</h3><p className="mt-1 text-xs font-semibold text-slate-500">{project.code} · {project.scheduleId ? 'Cronograma criado' : 'Cronograma pendente'}</p></div></div>
           <div className="mt-5 flex gap-5 text-sm"><span><b className="text-slate-800">{project.openActionCount}</b> abertas</span><span><b className="text-slate-800">{project.actionCount}</b> ações</span></div>
           <div className="mt-5 grid grid-cols-2 gap-2">
-            <a href={project.scheduleId ? `/acompanhamento?projeto=${encodeURIComponent(project.scheduleId)}` : `/acompanhamento?novo=${encodeURIComponent(project.name)}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-[#103f85] hover:bg-slate-50"><CalendarDays size={16} /> {project.scheduleId ? 'Cronograma' : 'Criar cronograma'}</a>
-            <a href={`/postits?projeto=${encodeURIComponent(project.name)}`} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#103f85] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0c326d]"><ClipboardList size={16} /> Ações</a>
+            {editor ? (
+              <a href={project.scheduleId ? `/acompanhamento?projeto=${encodeURIComponent(project.scheduleId)}` : `/acompanhamento?novo=${encodeURIComponent(project.name)}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-[#103f85] hover:bg-slate-50"><CalendarDays size={16} /> {project.scheduleId ? 'Editar cronograma' : 'Criar cronograma'}</a>
+            ) : project.scheduleId ? (
+              <a href={`/acompanhamento?projeto=${encodeURIComponent(project.scheduleId)}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-[#103f85] hover:bg-slate-50"><CalendarDays size={16} /> Visualizar cronograma</a>
+            ) : (
+              <span className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm font-medium text-slate-400"><CalendarDays size={16} /> Cronograma pendente</span>
+            )}
+            <a href={`${editor ? '/postits' : '/postits/visualizar'}?projeto=${encodeURIComponent(project.name)}`} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#103f85] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0c326d]"><ClipboardList size={16} /> {editor ? 'Gerenciar ações' : 'Visualizar ações'}</a>
           </div>
         </article>)}
       </div>}
