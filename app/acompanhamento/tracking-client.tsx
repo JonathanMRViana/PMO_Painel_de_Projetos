@@ -1238,18 +1238,20 @@ function PillarRow({
   colSpan,
   collapsed,
   onToggle,
+  plannedRange,
 }: {
   pillar: Pillar;
   colSpan: number;
   collapsed: boolean;
   onToggle: () => void;
+  plannedRange?: { startDate: string; endDate: string };
 }) {
   const meta = pillarMeta[pillar];
   const Icon = meta.icon;
   return (
     <tr>
       <td
-        colSpan={colSpan}
+        colSpan={plannedRange ? 4 : colSpan}
         className="px-4 py-3"
         style={{ background: meta.soft }}
       >
@@ -1269,6 +1271,29 @@ function PillarRow({
           </span>
         </button>
       </td>
+      {plannedRange && (
+        <>
+          <td
+            className="px-3 py-3 text-xs font-extrabold"
+            style={{ background: meta.soft, color: meta.accent }}
+            title="Menor data prevista das atividades deste pilar"
+          >
+            {formatDate(plannedRange.startDate)}
+          </td>
+          <td
+            className="px-3 py-3 text-xs font-extrabold"
+            style={{ background: meta.soft, color: meta.accent }}
+            title="Maior data prevista das atividades deste pilar"
+          >
+            {formatDate(plannedRange.endDate)}
+          </td>
+          <td
+            colSpan={colSpan - 6}
+            className="px-3 py-3"
+            style={{ background: meta.soft }}
+          />
+        </>
+      )}
     </tr>
   );
 }
@@ -1435,6 +1460,25 @@ function ProjectScheduleTable({
 }) {
   const map = new Map(tasks.map((task) => [task.id, task]));
   const choices = tasks.filter((task) => task.kind !== 'group');
+  const plannedRange = (pillar: Pillar) => {
+    const scheduled = tasks
+      .filter(
+        (task) =>
+          task.pillar === pillar &&
+          task.kind !== 'group' &&
+          task.startDate &&
+          task.endDate,
+      )
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+    if (!scheduled.length) return { startDate: '', endDate: '' };
+    return {
+      startDate: scheduled[0].startDate,
+      endDate: scheduled
+        .map((task) => task.endDate)
+        .sort()
+        .at(-1) ?? '',
+    };
+  };
   const fieldClass =
     'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
   return (
@@ -1472,6 +1516,7 @@ function ProjectScheduleTable({
                   colSpan={editable ? 14 : 13}
                   collapsed={collapsedPillars.has(pillar)}
                   onToggle={() => onTogglePillar(pillar)}
+                  plannedRange={plannedRange(pillar)}
                 />,
                 ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
                   (task) => {
