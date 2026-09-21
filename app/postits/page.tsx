@@ -13,6 +13,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import { PmoToolHeader } from '@/components/pmo-tool-header';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -649,12 +650,10 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     } finally { setSaving(false); }
   }
   return (
+    <>
+      <PmoToolHeader title="Quadro de ações" subtitle="Acompanhamento semanal" backHref={viewOnly ? undefined : '/'} />
     <main className={styles.page}>
       <header className={styles.header}>
-        <div className={styles.brandLine}>
-          <img src="/makro-logo.png" alt="Makro Engenharia" className={styles.brandLogo} />
-          {!viewOnly && <a className={styles.backLink} href="/">← Cockpit PMO</a>}
-        </div>
         <div className={styles.headContent}>
           <div>
             <h1>Quadro semanal de ações</h1>
@@ -1106,6 +1105,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
         </DialogContent>
       </Dialog>
     </main>
+    </>
   );
 }
 function Field({

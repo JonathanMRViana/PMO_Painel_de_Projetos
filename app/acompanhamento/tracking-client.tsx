@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft,
   BarChart3,
   Building2,
   ChevronDown,
@@ -20,6 +19,7 @@ import {
   Trash2,
   Truck,
 } from 'lucide-react';
+import { PmoToolHeader } from '@/components/pmo-tool-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -584,35 +584,11 @@ export function TrackingClient() {
 
   return (
     <main className="min-h-screen bg-[#f4f6f7] text-slate-900">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1560px] items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <div className="flex items-center gap-4">
-            <a
-              href="/"
-              aria-label="Voltar às ferramentas"
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#103f85]"
-            >
-              <ArrowLeft size={21} />
-            </a>
-            <img
-              src="/makro-logo.png"
-              alt="Makro Engenharia"
-              className="h-9 w-auto object-contain"
-            />
-            <div className="hidden border-l border-slate-200 pl-4 sm:block">
-              <p className="text-sm font-bold text-slate-800">
-                Project padrão Makro
-              </p>
-              <p className="text-xs text-slate-500">
-                Cronograma de mobilização
-              </p>
-            </div>
-          </div>
-          <Button size="lg" onClick={() => requireAccess('project')}>
-            <Plus /> Novo projeto
-          </Button>
-        </div>
-      </header>
+      <PmoToolHeader title="Project padrão Makro" subtitle="Cronograma de mobilização" backHref="/">
+        <Button size="lg" onClick={() => requireAccess('project')}>
+          <Plus /> Novo projeto
+        </Button>
+      </PmoToolHeader>
 
       <div className="mx-auto max-w-[1560px] px-5 py-7 sm:px-8">
         <section className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
