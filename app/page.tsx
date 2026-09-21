@@ -1,5 +1,4 @@
-import { CalendarDays, ClipboardList, Truck } from 'lucide-react';
-import { ProjectOverviewClient } from './project-overview-client';
+import { CalendarDays, ClipboardList, FolderKanban, Truck } from 'lucide-react';
 
 export const dynamic = 'force-static';
 const publicBase = process.env.PMO_GITHUB_PAGES === '1' ? '/PMO_Painel_de_Projetos' : '';
@@ -103,9 +102,30 @@ export default function Home() {
               →
             </span>
           </a>
-        </section>
 
-        <ProjectOverviewClient />
+          <a
+            href="/projetos"
+            className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#edf2fb] text-[#103f85]">
+              <FolderKanban size={24} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-lg font-bold text-slate-800">
+                Projetos
+              </span>
+              <span className="mt-1 block text-sm leading-5 text-slate-600">
+                Pastas dos projetos, status, cronogramas e ações.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="text-2xl text-[#ed1c24] transition-transform group-hover:translate-x-1"
+            >
+              →
+            </span>
+          </a>
+        </section>
       </div>
     </main>
   );
