@@ -1,0 +1,1 @@
+ALTER TABLE `pmo_projects` ADD `status` text DEFAULT 'Planejamento' NOT NULL;

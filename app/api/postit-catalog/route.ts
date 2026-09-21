@@ -1,6 +1,6 @@
 import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
-import { ensureProjectInBoard, ensureProjectRecord } from '@/lib/project-hub';
+import { ensureProjectInBoard, ensureProjectRecord, updateProjectStatus } from '@/lib/project-hub';
 
 const defaultProjects = [
   ['AMP', '#d9c7f3'],
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
       type?: string;
       name?: string;
       color?: string;
+      status?: string;
     };
     const type =
       body.type === 'project' || body.type === 'sector' ? body.type : '';
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
     if (duplicate) throw new Error('Este cadastro já existe.');
     if (type === 'project') {
       const project = await ensureProjectInBoard(name, body.color || '#d8e5e5');
+      await updateProjectStatus(project.name, body.status || 'Planejamento');
       return Response.json({ item: { id: project.id, type, name: project.name, color: project.color, code: project.code } }, { status: 201 });
     }
     const item = { id: crypto.randomUUID(), type, name, color: null };
@@ -128,7 +130,7 @@ export async function PUT(request: Request) {
   try {
     const denied = await requireEditor(request);
     if (denied) return denied;
-    const body = (await request.json()) as { type?: string; oldName?: string; name?: string; color?: string };
+    const body = (await request.json()) as { type?: string; oldName?: string; name?: string; color?: string; status?: string };
     const type = body.type === 'project' || body.type === 'sector' ? body.type : '';
     const oldName = body.oldName?.trim() ?? '';
     const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
@@ -151,6 +153,7 @@ export async function PUT(request: Request) {
           db.prepare('UPDATE postit_actions SET sector = ? WHERE sector = ?').bind(name, oldName),
         ]);
     const project = type === 'project' ? await ensureProjectRecord(name, color || '#d8e5e5') : null;
+    if (type === 'project' && body.status !== undefined) await updateProjectStatus(name, body.status);
     return Response.json({ item: { type, name, color, code: project?.code }, oldName });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar o cadastro.' }, { status: 400 });
