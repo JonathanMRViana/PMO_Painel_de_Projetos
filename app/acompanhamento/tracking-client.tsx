@@ -9,7 +9,6 @@ import {
   CircleDot,
   HardHat,
   KeyRound,
-  LockKeyhole,
   Pencil,
   Plus,
   RefreshCw,
@@ -716,12 +715,6 @@ export function TrackingClient() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              {view === 'projects' && selectedProject && (
-                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">
-                  <LockKeyhole size={15} /> Estrutura da revisão{' '}
-                  {selectedProject.templateRevision}
-                </span>
-              )}
               {view === 'projects' && selectedProject && (
                 <div className="flex rounded-lg border border-slate-200 p-1">
                   <button
