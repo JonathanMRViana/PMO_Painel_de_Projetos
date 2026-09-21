@@ -672,9 +672,9 @@ export function TrackingClient() {
         </section>
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-end justify-center gap-4 border-b border-slate-200 px-5 py-4">
+          <div className="grid gap-4 border-b border-slate-200 px-5 py-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
             {view === 'projects' ? (
-              <div className="flex min-w-0 flex-wrap items-end justify-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-end justify-center gap-3 md:col-start-2 md:justify-self-center">
                 <div>
                   <h2 className="text-lg font-bold">Cronograma do projeto</h2>
                 </div>
@@ -719,11 +719,11 @@ export function TrackingClient() {
                 )}
               </div>
             ) : (
-              <div>
+              <div className="text-center md:col-start-2 md:justify-self-center">
                 <h2 className="text-lg font-bold">Padrão Makro editável</h2>
               </div>
             )}
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 md:col-start-3 md:justify-self-end">
               {view === 'projects' && selectedProject && (
                 <div className="flex rounded-lg border border-slate-200 p-1">
                   <button
