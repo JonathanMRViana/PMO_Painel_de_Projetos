@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   BarChart3,
   Building2,
@@ -160,6 +161,7 @@ function withGroupSummaries(tasks: Task[]) {
 }
 
 export function TrackingClient() {
+  const searchParams = useSearchParams();
   const [view, setView] = useState<'projects' | 'template'>('projects');
   const [projectMode, setProjectMode] = useState<'schedule' | 'gantt'>(
     'schedule',
@@ -258,6 +260,19 @@ export function TrackingClient() {
   useEffect(() => {
     void loadAll();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const projectId = searchParams.get('projeto')?.trim();
+    const newProject = searchParams.get('novo')?.trim();
+    if (projectId && projects.some((project) => project.id === projectId)) {
+      setSelectedProjectId(projectId);
+      void loadProject(projectId);
+    }
+    if (newProject && isEditor && !projects.some((project) => project.name.toLocaleLowerCase('pt-BR') === newProject.toLocaleLowerCase('pt-BR'))) {
+      setProjectName(newProject);
+      setProjectDialogOpen(true);
+    }
+  }, [isEditor, loadProject, projects, searchParams]);
 
   const displayProjectTasks = useMemo(
     () => withGroupSummaries(projectTasks),
@@ -362,9 +377,7 @@ export function TrackingClient() {
       setSelectedProjectId(data.project.id);
       await loadProject(data.project.id);
       setView('projects');
-      setNotice(
-        `Projeto ${data.project.name} criado com a revisão ${data.project.templateRevision} do padrão.`,
-      );
+      setNotice(`Projeto ${data.project.name} criado com cronograma padrão.`);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -849,8 +862,8 @@ export function TrackingClient() {
           <DialogHeader>
             <DialogTitle>Novo projeto</DialogTitle>
             <DialogDescription>
-              O projeto receberá a revisão {revision}. A estrutura ficará
-              bloqueada, mas o cronograma será editável.
+              O cronograma será criado com as frentes de contrato, frota, mão
+              de obra, informações legais e CFI.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">

@@ -5,6 +5,8 @@ import {
   rowToTrackingTask,
   trackingError,
 } from '@/lib/project-tracking-db';
+import { ensureProjectInBoard } from '@/lib/project-hub';
+import { syncScheduleActions } from '@/lib/schedule-action-sync';
 
 const statuses = ['Não iniciado', 'Em andamento', 'Concluído', 'Bloqueado'];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -137,6 +139,8 @@ export async function POST(request: Request) {
       }),
     ];
     await db.batch(statements);
+    await ensureProjectInBoard(name);
+    if (startDate) await syncScheduleActions(projectId, name);
     return Response.json(
       {
         project: {
@@ -272,6 +276,11 @@ export async function PUT(request: Request) {
         )
         .bind(updatedAt, projectId),
     ]);
+    const project = await db
+      .prepare('SELECT name FROM project_tracking_projects WHERE id = ?')
+      .bind(projectId)
+      .first<{ name: string }>();
+    if (project) await syncScheduleActions(projectId, project.name);
     return Response.json({ updatedAt });
   } catch (error) {
     return trackingError(error, 'Não foi possível atualizar o cronograma.');

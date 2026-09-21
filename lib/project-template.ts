@@ -2,7 +2,7 @@ export const pillars = ['Empresa', 'Pessoas', 'Equipamentos'] as const;
 export type Pillar = (typeof pillars)[number];
 export type TaskKind = 'group' | 'task' | 'milestone';
 
-export const STANDARD_TEMPLATE_VERSION = '2026-09-16-v2';
+export const STANDARD_TEMPLATE_VERSION = '2026-09-21-v3';
 
 type SeedRow = [
   pillar: Pillar,
@@ -427,5 +427,40 @@ export const defaultTemplateTasks = rows.map(
     predecessorId: predecessorItem ? taskId(predecessorItem) : null,
     kind,
     sortOrder: (index + 1) * 10,
+  }),
+);
+
+// Escopo padrão de mobilização, consolidado das abas Contrato, Frota,
+// Mão de Obra, Inf. Legais e CFI do modelo de projeto.
+const scopedRows: SeedRow[] = [
+  ['Empresa', '1', 'CONTRATO', '', '', 'group'],
+  ['Empresa', '1.1', 'Cadastrar identificação e vigência do contrato', 'Comercial', '1', 'task', 2],
+  ['Empresa', '1.2', 'Confirmar prazo de mobilização e reunião de kickoff', 'Operação', '1', 'task', 2],
+  ['Empresa', '1.3', 'Cadastrar responsáveis Makro e cliente', 'Comercial', '1', 'task', 2],
+  ['Equipamentos', '2', 'FROTA', '', '', 'group'],
+  ['Equipamentos', '2.1', 'Definir frota e data de início dos equipamentos', 'Operação', '2', 'task', 3],
+  ['Equipamentos', '2.2', 'Validar plano de manutenção preventiva', 'Manutenção', '2', 'task', 2],
+  ['Equipamentos', '2.3', 'Regularizar documentação da frota e acessórios', 'Engenharia', '2', 'task', 3],
+  ['Pessoas', '3', 'MÃO DE OBRA', '', '', 'group'],
+  ['Pessoas', '3.1', 'Dimensionar quadro de mão de obra e turnos', 'Gente e Gestão', '3', 'task', 2],
+  ['Pessoas', '3.2', 'Conduzir processo seletivo e admissões', 'Gente e Gestão', '3', 'task', 5],
+  ['Pessoas', '3.3', 'Programar integração, crachá e treinamentos', 'SMS', '3', 'task', 3],
+  ['Empresa', '4', 'INFORMAÇÕES LEGAIS', '', '', 'group'],
+  ['Empresa', '4.1', 'Consolidar documentos legais da Makro', 'CDI', '4', 'task', 3],
+  ['Empresa', '4.2', 'Consolidar informações legais do cliente', 'CDI', '4', 'task', 2],
+  ['Empresa', '4.3', 'Preparar programas legais e requisitos de segurança', 'SMS', '4', 'task', 4],
+  ['Empresa', '5', 'CFI', '', '', 'group'],
+  ['Empresa', '5.1', 'Definir composição do custo fixo indireto', 'Financeiro', '5', 'task', 3],
+  ['Empresa', '5.2', 'Validar veículos de apoio e vinculação à frota', 'Operação', '5', 'task', 2],
+  ['Empresa', '5.3', 'Consolidar observações e premissas do CFI', 'Financeiro', '5', 'task', 2],
+  ['Empresa', 'M.1', 'INÍCIO DA OPERAÇÃO', 'Operação', '', 'milestone', 0],
+];
+
+export const projectScopeTemplateTasks = scopedRows.map(
+  ([pillar, item, title, owner = '', parent = '', kind = 'task', durationDays = 1, predecessorItem = ''], index) => ({
+    id: taskId(`scope-${item}`), parentId: parent ? taskId(`scope-${parent}`) : null, pillar, item, title, owner,
+    durationDays: kind === 'group' ? 0 : durationDays,
+    predecessorId: predecessorItem ? taskId(`scope-${predecessorItem}`) : null,
+    kind, sortOrder: (index + 1) * 10,
   }),
 );

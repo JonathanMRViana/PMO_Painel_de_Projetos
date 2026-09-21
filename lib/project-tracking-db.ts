@@ -1,6 +1,6 @@
 import { getDb } from '@/db';
 import {
-  defaultTemplateTasks,
+  projectScopeTemplateTasks,
   STANDARD_TEMPLATE_VERSION,
 } from '@/lib/project-template';
 
@@ -64,7 +64,7 @@ export async function ensureStandardTemplate() {
 
   await db.batch([
     db.prepare('DELETE FROM project_tracking_template_tasks'),
-    ...defaultTemplateTasks.map((task) =>
+    ...projectScopeTemplateTasks.map((task) =>
       db
         .prepare(
           'INSERT INTO project_tracking_template_tasks (id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, kind, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',

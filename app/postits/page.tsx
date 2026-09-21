@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
   CircleAlert,
@@ -297,6 +298,7 @@ async function api(method: 'POST' | 'PUT' | 'DELETE', body: unknown) {
   return data;
 }
 export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boolean }) {
+  const searchParams = useSearchParams();
   const [actions, setActions] = useState<Action[]>([]),
     [loading, setLoading] = useState(true),
     [saving, setSaving] = useState(false),
@@ -342,6 +344,10 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   useEffect(() => {
     if (authChecked) void load();
   }, [authChecked]);
+  useEffect(() => {
+    const project = searchParams.get('projeto')?.trim();
+    if (project) setSelectedProject(project);
+  }, [searchParams]);
   const canEdit = !viewOnly && editorMode;
   async function load() {
     setLoading(true);

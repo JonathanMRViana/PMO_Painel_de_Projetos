@@ -1,4 +1,5 @@
 import { CalendarDays, ClipboardList } from 'lucide-react';
+import { ProjectOverviewClient } from './project-overview-client';
 
 export default function Home() {
   return (
@@ -20,11 +21,10 @@ export default function Home() {
             Cockpit PMO
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Ferramentas do PMO
+            Visão geral
           </h1>
           <p className="mt-3 text-base text-slate-600">
-            Acesse as ferramentas disponíveis para o acompanhamento dos
-            projetos.
+            Acesse cada projeto, seu cronograma e o quadro de ações.
           </p>
         </section>
 
@@ -78,6 +78,8 @@ export default function Home() {
             </span>
           </a>
         </section>
+
+        <ProjectOverviewClient />
       </div>
     </main>
   );
