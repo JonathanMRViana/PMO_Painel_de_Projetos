@@ -384,6 +384,13 @@ export async function PUT(request: Request) {
           'UPDATE project_tracking_projects SET updated_at = ? WHERE id = ?',
         )
         .bind(updatedAt, projectId),
+      ...(linkedActionId
+        ? [
+            db
+              .prepare('DELETE FROM postit_actions WHERE id = ? AND id != ?')
+              .bind(`schedule:${projectId}:${taskId}`, linkedActionId),
+          ]
+        : []),
     ]);
     const project = await db
       .prepare('SELECT name, project_code FROM project_tracking_projects WHERE id = ?')

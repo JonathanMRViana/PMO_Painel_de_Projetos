@@ -13,7 +13,7 @@ function boardDayFor(date: string) {
 }
 export async function syncScheduleActions(projectId: string, projectName: string, projectCode = '') {
   const db = getDb();
-  const tasks = await db.prepare("SELECT id, title, owner, end_date, kind, observation, progress FROM project_tracking_project_tasks WHERE project_id = ? AND kind != 'group' AND owner != '' AND end_date != ''").bind(projectId).all();
+  const tasks = await db.prepare("SELECT id, title, owner, end_date, kind, observation, progress FROM project_tracking_project_tasks WHERE project_id = ? AND kind != 'group' AND owner != '' AND end_date != '' AND linked_action_id IS NULL").bind(projectId).all();
   const statements = tasks.results.flatMap((row) => {
     const owner = String(row.owner || '').trim(), sector = sectorFor(owner), date = String(row.end_date || ''), id = `schedule:${projectId}:${String(row.id)}`;
     return [

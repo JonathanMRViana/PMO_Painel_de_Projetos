@@ -78,6 +78,15 @@ type BoardAction = {
   actionDate: string;
   completed: boolean;
 };
+type LinkedActionDraft = {
+  task: Task;
+  title: string;
+  observation: string;
+  owner: string;
+  date: string;
+  sector: string;
+  criticality: 'Baixo' | 'Médio' | 'Alto' | 'Crítico';
+};
 type TaskDraft = Pick<
   Task,
   'id' | 'pillar' | 'item' | 'title' | 'owner' | 'durationDays' | 'kind'
@@ -134,6 +143,24 @@ function automaticTaskStatus(task: Pick<Task, 'startDate' | 'endDate' | 'actualS
     return task.endDate && task.endDate < today ? 'Atrasado' : 'Em andamento';
   if (!task.startDate && !task.endDate) return 'Não planejado';
   return task.endDate && task.endDate < today ? 'Atrasado' : 'Não iniciado';
+}
+
+function boardDay(date: string) {
+  if (!date) return 'd7';
+  const due = new Date(`${date}T12:00:00`);
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const distance = Math.round((due.getTime() - monday.getTime()) / 86_400_000);
+  if (distance < 0 || distance > 4) return 'd7';
+  return (['seg', 'ter', 'qua', 'qui', 'sex'][distance] ?? 'd7');
+}
+
+function defaultSectorFor(task: Task) {
+  if (task.pillar === 'Pessoas') return 'DP / Gente & Gestão';
+  if (task.pillar === 'Equipamentos') return 'Manutenção';
+  return 'Engenharia';
 }
 
 function withGroupSummaries(tasks: Task[]) {
@@ -204,6 +231,7 @@ export function TrackingClient() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [projectActions, setProjectActions] = useState<BoardAction[]>([]);
+  const [boardSectors, setBoardSectors] = useState<string[]>([]);
   const [isEditor, setIsEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -223,6 +251,8 @@ export function TrackingClient() {
   const [taskTarget, setTaskTarget] = useState<'template' | 'project'>(
     'template',
   );
+  const [linkedActionDraft, setLinkedActionDraft] =
+    useState<LinkedActionDraft | null>(null);
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
   const [deleteProject, setDeleteProject] = useState<Project | null>(null);
   const [deleteProjectConfirmation, setDeleteProjectConfirmation] =
@@ -259,7 +289,7 @@ export function TrackingClient() {
     setLoading(true);
     setError('');
     try {
-      const [template, projectData, session] = await Promise.all([
+      const [template, projectData, session, catalog] = await Promise.all([
         json<{ revision: number; tasks: Task[] }>(
           await fetch('/api/project-tracking/template', { cache: 'no-store' }),
         ),
@@ -269,11 +299,15 @@ export function TrackingClient() {
         json<{ authenticated: boolean }>(
           await fetch('/api/editor-session', { cache: 'no-store' }),
         ),
+        json<{ sectors: Array<{ name: string }> }>(
+          await fetch('/api/postit-catalog', { cache: 'no-store' }),
+        ),
       ]);
       setTemplateTasks(template.tasks);
       setRevision(template.revision);
       setProjects(projectData.projects);
       setIsEditor(session.authenticated);
+      setBoardSectors(catalog.sectors.map((sector) => sector.name));
       const next =
         projectData.projects.find((project) => project.id === selectedProjectId)
           ?.id ??
@@ -500,6 +534,71 @@ export function TrackingClient() {
       );
     } finally {
       setSavingTaskId('');
+    }
+  }
+
+  function openCreateLinkedAction(task: Task) {
+    setLinkedActionDraft({
+      task,
+      title: task.title,
+      observation: task.observation,
+      owner: task.owner,
+      date: task.endDate,
+      sector: defaultSectorFor(task),
+      criticality: 'Médio',
+    });
+  }
+
+  async function createLinkedAction() {
+    if (!selectedProject || !linkedActionDraft) return;
+    const draft = linkedActionDraft;
+    if (!draft.title.trim() || !draft.owner.trim() || !draft.date || !draft.sector)
+      return setError('Informe título, responsável, prazo previsto e setor da ação.');
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const created = await json<{ action: { id: string } }>(
+        await fetch('/api/postit-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            title: draft.title,
+            observation: draft.observation,
+            owner: draft.owner,
+            date: draft.date,
+            day: boardDay(draft.date),
+            sector: draft.sector,
+            project: selectedProject.name,
+            criticality: draft.criticality,
+            completed: false,
+          }),
+        }),
+      );
+      await json(
+        await fetch('/api/project-tracking/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: selectedProject.id,
+            taskId: draft.task.id,
+            ...draft.task,
+            linkedActionId: created.action.id,
+          }),
+        }),
+      );
+      setLinkedActionDraft(null);
+      await loadProject(selectedProject.id);
+      setNotice('Ação criada no quadro e vinculada à tarefa do cronograma.');
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Não foi possível criar a ação vinculada.',
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -898,6 +997,7 @@ export function TrackingClient() {
               savingTaskId={savingTaskId}
               onChange={patchProjectTask}
               onSave={saveProjectTask}
+              onCreateAction={openCreateLinkedAction}
             />
           )}
         </section>
@@ -1151,6 +1251,126 @@ export function TrackingClient() {
               }
             >
               {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(linkedActionDraft)}
+        onOpenChange={(open) => {
+          if (!open && !saving) setLinkedActionDraft(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Criar ação vinculada</DialogTitle>
+            <DialogDescription>
+              A ação será criada no Quadro de Ações e ficará vinculada à tarefa{' '}
+              {linkedActionDraft?.task.item} do projeto {selectedProject?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          {linkedActionDraft && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+                Título da ação
+                <Input
+                  value={linkedActionDraft.title}
+                  onChange={(event) =>
+                    setLinkedActionDraft((draft) =>
+                      draft ? { ...draft, title: event.target.value } : draft,
+                    )
+                  }
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+                Observação
+                <textarea
+                  value={linkedActionDraft.observation}
+                  onChange={(event) =>
+                    setLinkedActionDraft((draft) =>
+                      draft
+                        ? { ...draft, observation: event.target.value }
+                        : draft,
+                    )
+                  }
+                  className="min-h-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#103f85]"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Responsável
+                <Input
+                  value={linkedActionDraft.owner}
+                  onChange={(event) =>
+                    setLinkedActionDraft((draft) =>
+                      draft ? { ...draft, owner: event.target.value } : draft,
+                    )
+                  }
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Prazo previsto
+                <Input
+                  type="date"
+                  value={linkedActionDraft.date}
+                  onChange={(event) =>
+                    setLinkedActionDraft((draft) =>
+                      draft ? { ...draft, date: event.target.value } : draft,
+                    )
+                  }
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Setor
+                <select
+                  value={linkedActionDraft.sector}
+                  onChange={(event) =>
+                    setLinkedActionDraft((draft) =>
+                      draft ? { ...draft, sector: event.target.value } : draft,
+                    )
+                  }
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm"
+                >
+                  {[...new Set([linkedActionDraft.sector, ...boardSectors])].map(
+                    (sector) => (
+                      <option key={sector}>{sector}</option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Criticidade
+                <select
+                  value={linkedActionDraft.criticality}
+                  onChange={(event) =>
+                    setLinkedActionDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            criticality: event.target.value as LinkedActionDraft['criticality'],
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm"
+                >
+                  {['Baixo', 'Médio', 'Alto', 'Crítico'].map((level) => (
+                    <option key={level}>{level}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLinkedActionDraft(null)}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={() => void createLinkedAction()} disabled={saving}>
+              {saving ? 'Criando...' : 'Criar e vincular'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1448,6 +1668,7 @@ function ProjectScheduleTable({
   savingTaskId,
   onChange,
   onSave,
+  onCreateAction,
 }: {
   tasks: Task[];
   actions: BoardAction[];
@@ -1457,6 +1678,7 @@ function ProjectScheduleTable({
   savingTaskId: string;
   onChange: (id: string, changes: Partial<Task>) => void;
   onSave: (task: Task) => void;
+  onCreateAction: (task: Task) => void;
 }) {
   const map = new Map(tasks.map((task) => [task.id, task]));
   const choices = tasks.filter((task) => task.kind !== 'group');
@@ -1693,24 +1915,35 @@ function ProjectScheduleTable({
                           {summary ? (
                             '—'
                           ) : (
-                            <select
-                              value={task.linkedActionId ?? ''}
-                              disabled={!editable}
-                              onChange={(e) =>
-                                onChange(task.id, {
-                                  linkedActionId: e.target.value || null,
-                                })
-                              }
-                              className={`${fieldClass} w-full`}
-                            >
-                              <option value="">Sem vínculo</option>
-                              {actions.map((action) => (
-                                <option key={action.id} value={action.id}>
-                                  {action.completed ? 'Concluída · ' : ''}
-                                  {action.title} · {formatDate(action.actionDate)}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="grid gap-1.5">
+                              <select
+                                value={task.linkedActionId ?? ''}
+                                disabled={!editable}
+                                onChange={(e) =>
+                                  onChange(task.id, {
+                                    linkedActionId: e.target.value || null,
+                                  })
+                                }
+                                className={`${fieldClass} w-full`}
+                              >
+                                <option value="">Selecionar ação existente</option>
+                                {actions.map((action) => (
+                                  <option key={action.id} value={action.id}>
+                                    {action.completed ? 'Concluída · ' : ''}
+                                    {action.title} · {formatDate(action.actionDate)}
+                                  </option>
+                                ))}
+                              </select>
+                              {editable && (
+                                <button
+                                  type="button"
+                                  onClick={() => onCreateAction(task)}
+                                  className="text-left text-[11px] font-bold text-[#103f85] hover:underline"
+                                >
+                                  + Criar ação vinculada
+                                </button>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="px-3 py-2.5">
