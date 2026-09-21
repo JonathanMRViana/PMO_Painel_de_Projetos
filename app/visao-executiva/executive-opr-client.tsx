@@ -135,7 +135,7 @@ export function ExecutiveOprClient() {
     <PmoToolHeader title="Visão Executiva" subtitle="OPR de mobilização por projeto" backHref="/">
       {editor && <Button onClick={openNew} disabled={!selectedProject}><Plus /> Adicionar frota</Button>}
     </PmoToolHeader>
-    <div className="mx-auto max-w-[1680px] px-5 py-7 sm:px-8">
+    <div className="mx-auto w-full max-w-none px-3 py-7 sm:px-5">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#ed1c24]">Acompanhamento executivo</p>

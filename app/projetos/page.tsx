@@ -11,7 +11,7 @@ export default function ProjectsPage() {
         subtitle="Pastas, status, cronogramas e ações"
         backHref="/"
       />
-      <div className="mx-auto max-w-[1680px] px-5 py-7 sm:px-8">
+      <div className="mx-auto w-full max-w-none px-3 py-7 sm:px-5">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#ed1c24]">Cockpit PMO</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">Projetos</h1>
