@@ -1,4 +1,4 @@
-import { CalendarDays, ClipboardList } from 'lucide-react';
+import { CalendarDays, ClipboardList, Truck } from 'lucide-react';
 import { ProjectOverviewClient } from './project-overview-client';
 
 export const dynamic = 'force-static';
@@ -71,6 +71,29 @@ export default function Home() {
               </span>
               <span className="mt-1 block text-sm leading-5 text-slate-600">
                 Modelo padrão Makro para mobilização, pessoas e equipamentos.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="text-2xl text-[#ed1c24] transition-transform group-hover:translate-x-1"
+            >
+              →
+            </span>
+          </a>
+
+          <a
+            href="/visao-executiva"
+            className="group flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-[#8aa6d1] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#103f85]"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#edf2fb] text-[#103f85]">
+              <Truck size={24} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-lg font-bold text-slate-800">
+                Visão Executiva
+              </span>
+              <span className="mt-1 block text-sm leading-5 text-slate-600">
+                OPR das frotas e marcos de mobilização por projeto.
               </span>
             </span>
             <span

@@ -128,6 +128,38 @@ export const pmoProjects = sqliteTable(
   ],
 );
 
+export const projectOprFleets = sqliteTable(
+  'project_opr_fleets',
+  {
+    id: text('id').primaryKey(),
+    projectCode: text('project_code').notNull(),
+    client: text('client').notNull().default(''),
+    fleet: text('fleet').notNull().default(''),
+    description: text('description').notNull().default(''),
+    plannedDate: text('planned_date').notNull().default(''),
+    matrixArrivalDate: text('matrix_arrival_date').notNull().default(''),
+    fleetDefinition: text('fleet_definition').notNull().default(''),
+    basicKit: text('basic_kit').notNull().default(''),
+    maintenanceRelease: text('maintenance_release').notNull().default(''),
+    configuration: text('configuration').notNull().default(''),
+    acquisition: text('acquisition').notNull().default(''),
+    adaptations: text('adaptations').notNull().default(''),
+    fleetDocumentation: text('fleet_documentation').notNull().default(''),
+    teamDefinition: text('team_definition').notNull().default(''),
+    badge: text('badge').notNull().default(''),
+    teamDocumentation: text('team_documentation').notNull().default(''),
+    pgrPcmso: text('pgr_pcmso').notNull().default(''),
+    legalDocuments: text('legal_documents').notNull().default(''),
+    clientInspection: text('client_inspection').notNull().default(''),
+    billing: text('billing').notNull().default(''),
+    createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
+    updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
+  },
+  (table) => [
+    index('idx_project_opr_fleets_project').on(table.projectCode),
+  ],
+);
+
 export const projectTrackingProjectTasks = sqliteTable(
   'project_tracking_project_tasks',
   {

@@ -1,0 +1,118 @@
+import { getDb } from '@/db';
+import { requireEditor } from '@/lib/editor-auth';
+
+const fields = [
+  'client', 'fleet', 'description', 'plannedDate', 'matrixArrivalDate',
+  'fleetDefinition', 'basicKit', 'maintenanceRelease', 'configuration',
+  'acquisition', 'adaptations', 'fleetDocumentation', 'teamDefinition',
+  'badge', 'teamDocumentation', 'pgrPcmso', 'legalDocuments',
+  'clientInspection', 'billing',
+] as const;
+
+type OprBody = Partial<Record<(typeof fields)[number], unknown>> & {
+  id?: unknown;
+  projectCode?: unknown;
+};
+
+const selectColumns = `id, project_code, client, fleet, description, planned_date,
+  matrix_arrival_date, fleet_definition, basic_kit, maintenance_release,
+  configuration, acquisition, adaptations, fleet_documentation, team_definition,
+  badge, team_documentation, pgr_pcmso, legal_documents, client_inspection,
+  billing, created_at, updated_at`;
+
+function clean(value: unknown) {
+  return String(value ?? '').trim().slice(0, 160);
+}
+
+function rowToOpr(row: Record<string, unknown>) {
+  return {
+    id: String(row.id), projectCode: String(row.project_code), client: String(row.client || ''),
+    fleet: String(row.fleet || ''), description: String(row.description || ''),
+    plannedDate: String(row.planned_date || ''), matrixArrivalDate: String(row.matrix_arrival_date || ''),
+    fleetDefinition: String(row.fleet_definition || ''), basicKit: String(row.basic_kit || ''),
+    maintenanceRelease: String(row.maintenance_release || ''), configuration: String(row.configuration || ''),
+    acquisition: String(row.acquisition || ''), adaptations: String(row.adaptations || ''),
+    fleetDocumentation: String(row.fleet_documentation || ''), teamDefinition: String(row.team_definition || ''),
+    badge: String(row.badge || ''), teamDocumentation: String(row.team_documentation || ''),
+    pgrPcmso: String(row.pgr_pcmso || ''), legalDocuments: String(row.legal_documents || ''),
+    clientInspection: String(row.client_inspection || ''), billing: String(row.billing || ''),
+    createdAt: String(row.created_at || ''), updatedAt: String(row.updated_at || ''),
+  };
+}
+
+export async function GET(request: Request) {
+  try {
+    const projectCode = new URL(request.url).searchParams.get('projeto')?.trim() || '';
+    const db = getDb();
+    const query = projectCode
+      ? db.prepare(`SELECT ${selectColumns} FROM project_opr_fleets WHERE project_code = ? ORDER BY planned_date, fleet`).bind(projectCode)
+      : db.prepare(`SELECT ${selectColumns} FROM project_opr_fleets ORDER BY project_code, planned_date, fleet`);
+    const result = await query.all();
+    return Response.json({ records: result.results.map((row) => rowToOpr(row as Record<string, unknown>)) });
+  } catch {
+    return Response.json({ error: 'Não foi possível carregar a OPR.' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
+    const body = await request.json() as OprBody;
+    const projectCode = clean(body.projectCode);
+    const fleet = clean(body.fleet);
+    if (!projectCode) return Response.json({ error: 'Selecione um projeto.' }, { status: 400 });
+    if (!fleet) return Response.json({ error: 'Informe a frota.' }, { status: 400 });
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    const values = fields.map((field) => clean(body[field]));
+    await getDb().prepare(`INSERT INTO project_opr_fleets (
+      id, project_code, client, fleet, description, planned_date, matrix_arrival_date,
+      fleet_definition, basic_kit, maintenance_release, configuration, acquisition,
+      adaptations, fleet_documentation, team_definition, badge, team_documentation,
+      pgr_pcmso, legal_documents, client_inspection, billing, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, projectCode, ...values, now, now).run();
+    const record = await getDb().prepare(`SELECT ${selectColumns} FROM project_opr_fleets WHERE id = ?`).bind(id).first<Record<string, unknown>>();
+    return Response.json({ record: rowToOpr(record!) }, { status: 201 });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível salvar a frota.' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
+    const body = await request.json() as OprBody;
+    const id = clean(body.id);
+    const projectCode = clean(body.projectCode);
+    const fleet = clean(body.fleet);
+    if (!id || !projectCode || !fleet) return Response.json({ error: 'Informe projeto e frota.' }, { status: 400 });
+    const values = fields.map((field) => clean(body[field]));
+    const result = await getDb().prepare(`UPDATE project_opr_fleets SET
+      project_code = ?, client = ?, fleet = ?, description = ?, planned_date = ?, matrix_arrival_date = ?,
+      fleet_definition = ?, basic_kit = ?, maintenance_release = ?, configuration = ?, acquisition = ?,
+      adaptations = ?, fleet_documentation = ?, team_definition = ?, badge = ?, team_documentation = ?,
+      pgr_pcmso = ?, legal_documents = ?, client_inspection = ?, billing = ?, updated_at = ? WHERE id = ?`)
+      .bind(projectCode, ...values, new Date().toISOString(), id).run();
+    if (!result.meta.changes) return Response.json({ error: 'Registro não encontrado.' }, { status: 404 });
+    const record = await getDb().prepare(`SELECT ${selectColumns} FROM project_opr_fleets WHERE id = ?`).bind(id).first<Record<string, unknown>>();
+    return Response.json({ record: rowToOpr(record!) });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar a frota.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const denied = await requireEditor(request);
+    if (denied) return denied;
+    const id = clean((await request.json() as OprBody).id);
+    if (!id) return Response.json({ error: 'Registro não informado.' }, { status: 400 });
+    await getDb().prepare('DELETE FROM project_opr_fleets WHERE id = ?').bind(id).run();
+    return Response.json({ deletedId: id });
+  } catch {
+    return Response.json({ error: 'Não foi possível excluir a frota.' }, { status: 500 });
+  }
+}
