@@ -2,7 +2,9 @@ export const pillars = ['Empresa', 'Pessoas', 'Equipamentos'] as const;
 export type Pillar = (typeof pillars)[number];
 export type TaskKind = 'group' | 'task' | 'milestone';
 
-export const STANDARD_TEMPLATE_VERSION = '2026-09-21-v3';
+import { standardSourceRows } from '@/lib/s11d-source';
+
+export const STANDARD_TEMPLATE_VERSION = '2026-09-22-s11d-v1';
 
 type SeedRow = [
   pillar: Pillar,
@@ -456,11 +458,49 @@ const scopedRows: SeedRow[] = [
   ['Empresa', 'M.1', 'INÍCIO DA OPERAÇÃO', 'Operação', '', 'milestone', 0],
 ];
 
-export const projectScopeTemplateTasks = scopedRows.map(
-  ([pillar, item, title, owner = '', parent = '', kind = 'task', durationDays = 1, predecessorItem = ''], index) => ({
-    id: taskId(`scope-${item}`), parentId: parent ? taskId(`scope-${parent}`) : null, pillar, item, title, owner,
-    durationDays: kind === 'group' ? 0 : durationDays,
-    predecessorId: predecessorItem ? taskId(`scope-${predecessorItem}`) : null,
-    kind, sortOrder: (index + 1) * 10,
-  }),
-);
+// A planilha do S11D fornece a sequência e a hierarquia. O modelo não
+// carrega suas datas nem seus identificadores de frota para novos projetos.
+export const projectScopeTemplateTasks = (() => {
+  const counters: Record<Pillar, number[]> = {
+    Empresa: [0, 0],
+    Pessoas: [0, 0],
+    Equipamentos: [0, 0],
+  };
+  const parents: Record<Pillar, string | null> = {
+    Empresa: null,
+    Pessoas: null,
+    Equipamentos: null,
+  };
+  return standardSourceRows.map(([sourceRow, outline, title, owner], index) => {
+    const pillar: Pillar =
+      sourceRow < 41 ? 'Empresa' : sourceRow < 62 ? 'Pessoas' : 'Equipamentos';
+    const level = outline - (pillar === 'Equipamentos' ? 1 : 0);
+    const next = standardSourceRows[index + 1];
+    const nextPillar =
+      next && (next[0] < 41 ? 'Empresa' : next[0] < 62 ? 'Pessoas' : 'Equipamentos');
+    const kind: TaskKind =
+      nextPillar === pillar && next[1] > outline ? 'group' : 'task';
+    const counts = counters[pillar];
+    if (level === 1) {
+      counts[0] += 1;
+      counts[1] = 0;
+    } else {
+      counts[1] += 1;
+    }
+    const id = `std-s11d-${sourceRow}`;
+    const parentId = level > 1 ? parents[pillar] : null;
+    if (kind === 'group' && level === 1) parents[pillar] = id;
+    return {
+      id,
+      parentId,
+      pillar,
+      item: `${pillar === 'Empresa' ? 1 : pillar === 'Pessoas' ? 2 : 3}.${counts[0]}${level > 1 ? `.${counts[1]}` : ''}`,
+      title,
+      owner,
+      durationDays: kind === 'group' ? 0 : 1,
+      predecessorId: null,
+      kind,
+      sortOrder: (index + 1) * 10,
+    };
+  });
+})();

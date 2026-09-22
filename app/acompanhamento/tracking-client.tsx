@@ -373,6 +373,22 @@ export function TrackingClient() {
       ) as Record<Pillar, number>,
     [visibleTasks],
   );
+  const progressByPillar = useMemo(() => {
+    const parentIds = new Set(visibleTasks.map((task) => task.parentId).filter(Boolean));
+    return Object.fromEntries(
+      (Object.keys(pillarMeta) as Pillar[]).map((pillar) => {
+        const leaves = visibleTasks.filter(
+          (task) => task.pillar === pillar && task.kind === 'task' && !parentIds.has(task.id),
+        );
+        return [
+          pillar,
+          leaves.length
+            ? Math.round(leaves.reduce((total, task) => total + task.progress, 0) / leaves.length)
+            : 0,
+        ];
+      }),
+    ) as Record<Pillar, number>;
+  }, [visibleTasks]);
 
   function openNewTask(parent?: Task) {
     setTaskDialogPurpose('activity');
@@ -548,6 +564,30 @@ export function TrackingClient() {
           ? reason.message
           : 'Não foi possível salvar a data.',
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function importS11dSchedule() {
+    if (!selectedProject || !window.confirm(
+      'Aplicar ao S11D as atividades e datas do cronograma enviado? Atividades já editadas ou vinculadas a ações serão preservadas.',
+    )) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await json<{ imported: number; fleets: number }>(
+        await fetch('/api/project-tracking/import-s11d', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: selectedProject.id }),
+        }),
+      );
+      await loadProject(selectedProject.id);
+      setNotice(`Cronograma S11D importado: ${result.imported} linhas e ${result.fleets} frotas.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível importar o cronograma S11D.');
     } finally {
       setSaving(false);
     }
@@ -909,7 +949,14 @@ export function TrackingClient() {
                     {counts[pillar] ?? 0} ações
                   </span>
                 </div>
-                <h2 className="mt-4 text-xl font-bold">{pillar}</h2>
+                <div className="mt-4 flex items-baseline justify-between gap-3">
+                  <h2 className="text-xl font-bold">{pillar}</h2>
+                  {view === 'projects' && (
+                    <span className="text-sm font-bold text-slate-700">
+                      {progressByPillar[pillar]}%
+                    </span>
+                  )}
+                </div>
               </article>
             );
           })}
@@ -988,6 +1035,12 @@ export function TrackingClient() {
               )}
               {view === 'projects' && selectedProject && isEditor && (
                 <>
+                  {selectedProject.name.trim().toUpperCase() === 'S11D' &&
+                    !projectTasks.some((task) => task.id.includes(':s11d-r')) && (
+                      <Button variant="outline" disabled={saving} onClick={() => void importS11dSchedule()}>
+                        Importar cronograma S11D
+                      </Button>
+                    )}
                   <Button variant="outline" onClick={openNewEquipment}>
                     <Truck /> Adicionar equipamento
                   </Button>

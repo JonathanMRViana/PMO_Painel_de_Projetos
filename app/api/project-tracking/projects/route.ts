@@ -232,11 +232,6 @@ export async function POST(request: Request) {
           createdAt,
         ),
       ...template.tasks.map((task) => {
-        const taskStart = task.kind === 'group' ? '' : startDate;
-        const taskEnd =
-          task.kind === 'group'
-            ? ''
-            : addDays(startDate, Math.max(0, task.durationDays - 1));
         return db
           .prepare(
             'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
@@ -252,8 +247,8 @@ export async function POST(request: Request) {
             task.owner,
             task.durationDays,
             task.predecessorId ? `${projectId}:${task.predecessorId}` : null,
-            taskStart,
-            taskEnd,
+            '',
+            '',
             'Não iniciado',
             '',
             task.kind,
