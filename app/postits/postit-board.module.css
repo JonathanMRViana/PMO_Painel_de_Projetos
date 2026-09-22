@@ -36,8 +36,8 @@
 .dropActive::after { content:'Soltar ação aqui'; position:absolute; inset:8px; z-index:20; display:grid; place-items:center; border:2px dashed #16856f; border-radius:6px; background:rgb(220 239 233 / .92); color:#0b6252; font-size:12px; font-weight:800; letter-spacing:.04em; pointer-events:none; }
 .dropActive .postit { opacity:.16; }
 
-/* Cabeçalho, indicadores e quadro compartilham a mesma régua horizontal. */
-.header, .footerGrid, .boardShell { width:min(100%, 1640px); align-self:center; }
+/* Cabeçalho, indicadores e quadro usam toda a régua útil da ferramenta. */
+.header, .footerGrid, .boardShell { width:100%; align-self:center; }
 
 .colorChoice { display:grid; gap:7px; }
 .colorInput { display:flex; align-items:center; gap:9px; width:max-content; border:1px solid #d7dfe1; border-radius:8px; padding:6px 10px; background:#fff; color:#53636b; font-size:12px; font-weight:750; cursor:pointer; }

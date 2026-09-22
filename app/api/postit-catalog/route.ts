@@ -2,14 +2,6 @@ import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
 import { ensureProjectInBoard, ensureProjectRecord, updateProjectStatus } from '@/lib/project-hub';
 
-const defaultProjects = [
-  ['AMP', '#d9c7f3'],
-  ['5S8', '#aee4ec'],
-  ['ALPPEX', '#f7c2c5'],
-  ['RINVEST', '#bce8c8'],
-  ['ECOPÓS', '#9bc6bb'],
-  ['Geral', '#f1e6a9'],
-];
 const defaultSectors = [
   'Manutenção',
   'Operação / MKT',
@@ -23,6 +15,19 @@ const defaultSectors = [
 
 async function ensureDefaults() {
   const db = getDb();
+  // Registros antigos podem ter sido repetidos por sincronizações anteriores.
+  // O catálogo não referencia ações pelo id, portanto manter a primeira cópia é seguro.
+  await db.prepare(
+    `DELETE FROM postit_board_catalog
+     WHERE id IN (
+       SELECT id FROM (
+         SELECT id, ROW_NUMBER() OVER (
+           PARTITION BY type, lower(trim(name)) ORDER BY created_at, id
+         ) AS position
+         FROM postit_board_catalog
+       ) WHERE position > 1
+     )`,
+  ).run();
   const existing = await db
     .prepare('SELECT COUNT(*) AS total FROM postit_board_catalog')
     .first<{ total: number }>();
@@ -40,25 +45,21 @@ async function ensureDefaults() {
     const hubProjects = await db
       .prepare('SELECT name, color FROM pmo_projects')
       .all<{ name: string; color: string | null }>();
-    await db.batch(
-      hubProjects.results.map((project) =>
-        db
-          .prepare(
-            "INSERT OR IGNORE INTO postit_board_catalog (id, type, name, color, created_at) VALUES (?, 'project', ?, ?, CURRENT_TIMESTAMP)",
-          )
-          .bind(crypto.randomUUID(), project.name, project.color || '#d8e5e5'),
-      ),
-    );
+    const catalogProjects = await db
+      .prepare("SELECT name FROM postit_board_catalog WHERE type = 'project'")
+      .all<{ name: string }>();
+    const catalogNames = new Set(catalogProjects.results.map((project) => project.name.trim().toLocaleLowerCase('pt-BR')));
+    const statements = hubProjects.results
+      .filter((project) => !catalogNames.has(project.name.trim().toLocaleLowerCase('pt-BR')))
+      .map((project) => db
+        .prepare(
+          "INSERT INTO postit_board_catalog (id, type, name, color, created_at) VALUES (?, 'project', ?, ?, CURRENT_TIMESTAMP)",
+        )
+        .bind(crypto.randomUUID(), project.name, project.color || '#d8e5e5'));
+    if (statements.length) await db.batch(statements);
     return;
   }
   const statements = [
-    ...defaultProjects.map(([name, color]) =>
-      db
-        .prepare(
-          'INSERT INTO postit_board_catalog (id, type, name, color) VALUES (?, ?, ?, ?)',
-        )
-        .bind(crypto.randomUUID(), 'project', name, color),
-    ),
     ...defaultSectors.map((name) =>
       db
         .prepare(
@@ -78,10 +79,17 @@ export async function GET() {
         'SELECT id, type, name, color FROM postit_board_catalog ORDER BY type, created_at, name',
       )
       .all();
-    return Response.json({
-      projects: rows.results.filter((r) => r.type === 'project'),
-      sectors: rows.results.filter((r) => r.type === 'sector'),
-    });
+    const uniqueByName = (type: string) => {
+      const names = new Set<string>();
+      return rows.results.filter((row) => {
+        if (row.type !== type) return false;
+        const key = String(row.name).trim().toLocaleLowerCase('pt-BR');
+        if (names.has(key)) return false;
+        names.add(key);
+        return true;
+      });
+    };
+    return Response.json({ projects: uniqueByName('project'), sectors: uniqueByName('sector') });
   } catch {
     return Response.json(
       { error: 'Não foi possível carregar os projetos e setores.' },

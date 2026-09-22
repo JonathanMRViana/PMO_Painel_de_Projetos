@@ -97,6 +97,9 @@ const projectIdentity = (project: string) => {
   const normalized = project.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
   return ['alpek', 'alppex', 'alpex'].includes(normalized) ? 'alpek' : normalized;
 };
+const uniqueCatalogNames = (items: string[]) => Array.from(
+  new Map(items.map((item) => [projectIdentity(item), item.trim()])).values(),
+);
 const projectColor = (project: string, colors: Record<string, string>) => {
   const normalized = projectIdentity(project);
   // Paleta oficial: não deixa cores antigas gravadas no catálogo alterarem a leitura do quadro.
@@ -364,8 +367,8 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
       if (!r.ok)
         throw new Error(data.error || 'Não foi possível carregar o quadro.');
       if (catalogResponse.ok) {
-        setProjects(catalog.projects?.map((item) => item.name) || defaultProjects);
-        setSectors(catalog.sectors?.map((item) => item.name) || defaultSectors);
+        setProjects(uniqueCatalogNames(catalog.projects?.map((item) => item.name) || defaultProjects));
+        setSectors(uniqueCatalogNames(catalog.sectors?.map((item) => item.name) || defaultSectors));
         setProjectColors(Object.fromEntries((catalog.projects || []).map((item) => [item.name, item.color || '#d8e5e5'])));
       }
       if (data.actions?.length) {
