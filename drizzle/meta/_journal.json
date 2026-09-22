@@ -78,6 +78,13 @@
       "when": 1790021963538,
       "tag": "0010_clear_s11d_scheduled_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1790121600000,
+      "tag": "0011_add_project_start_milestones",
+      "breakpoints": true
     }
   ]
 }

@@ -8,13 +8,13 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
-  CircleDot,
   HardHat,
   KeyRound,
   Pencil,
   Plus,
   RefreshCw,
   Settings2,
+  Star,
   Table2,
   Trash2,
   Truck,
@@ -88,7 +88,15 @@ type LinkedActionDraft = {
 };
 type TaskDraft = Pick<
   Task,
-  'id' | 'pillar' | 'item' | 'title' | 'owner' | 'durationDays' | 'kind'
+  | 'id'
+  | 'pillar'
+  | 'item'
+  | 'title'
+  | 'owner'
+  | 'durationDays'
+  | 'kind'
+  | 'startDate'
+  | 'endDate'
 > & { parentId: string; predecessorId: string };
 
 const pillarMeta: Record<
@@ -109,6 +117,8 @@ const emptyDraft: TaskDraft = {
   owner: '',
   durationDays: 1,
   kind: 'task',
+  startDate: '',
+  endDate: '',
 };
 
 async function json<T>(response: Response): Promise<T> {
@@ -245,6 +255,9 @@ export function TrackingClient() {
   const [projectName, setProjectName] = useState('');
   const [projectStartDate, setProjectStartDate] = useState('');
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskDialogPurpose, setTaskDialogPurpose] = useState<
+    'activity' | 'equipment' | 'milestone'
+  >('activity');
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyDraft);
   const [taskTarget, setTaskTarget] = useState<'template' | 'project'>(
     'template',
@@ -361,6 +374,7 @@ export function TrackingClient() {
   );
 
   function openNewTask(parent?: Task) {
+    setTaskDialogPurpose('activity');
     setTaskTarget('template');
     setTaskDraft({
       ...emptyDraft,
@@ -371,11 +385,52 @@ export function TrackingClient() {
   }
 
   function openNewProjectTask(parent?: Task) {
+    setTaskDialogPurpose('activity');
     setTaskTarget('project');
     setTaskDraft({
       ...emptyDraft,
       pillar: parent?.pillar ?? 'Empresa',
       parentId: parent?.id ?? '',
+    });
+    setTaskDialogOpen(true);
+  }
+
+  function nextProjectItem(prefix: 'EQ' | 'M') {
+    const total = projectTasks.filter((task) =>
+      new RegExp(`^${prefix}\\.\\d+$`).test(task.item),
+    ).length;
+    return `${prefix}.${total + 1}`;
+  }
+
+  function openNewEquipment() {
+    if (!selectedProject) return;
+    setTaskDialogPurpose('equipment');
+    setTaskTarget('project');
+    setTaskDraft({
+      ...emptyDraft,
+      pillar: 'Equipamentos',
+      item: nextProjectItem('EQ'),
+      title: '',
+      durationDays: 1,
+      startDate: selectedProject.startDate,
+      endDate: selectedProject.startDate,
+    });
+    setTaskDialogOpen(true);
+  }
+
+  function openNewMilestone() {
+    if (!selectedProject) return;
+    setTaskDialogPurpose('milestone');
+    setTaskTarget('project');
+    setTaskDraft({
+      ...emptyDraft,
+      pillar: 'Empresa',
+      item: nextProjectItem('M'),
+      title: '',
+      durationDays: 0,
+      kind: 'milestone',
+      startDate: selectedProject.startDate,
+      endDate: selectedProject.startDate,
     });
     setTaskDialogOpen(true);
   }
@@ -907,9 +962,17 @@ export function TrackingClient() {
                 </Button>
               )}
               {view === 'projects' && selectedProject && isEditor && (
-                <Button onClick={() => requireAccess('task')}>
-                  <Plus /> Nova atividade
-                </Button>
+                <>
+                  <Button variant="outline" onClick={openNewEquipment}>
+                    <Truck /> Adicionar equipamento
+                  </Button>
+                  <Button variant="outline" onClick={openNewMilestone}>
+                    <Star /> Adicionar marco
+                  </Button>
+                  <Button onClick={() => requireAccess('task')}>
+                    <Plus /> Nova atividade
+                  </Button>
+                </>
               )}
               {view === 'projects' && selectedProject && (
                 <Button
@@ -1075,6 +1138,10 @@ export function TrackingClient() {
             <DialogTitle>
               {taskDraft.id
                 ? 'Editar atividade'
+                : taskDialogPurpose === 'equipment'
+                  ? 'Adicionar equipamento'
+                  : taskDialogPurpose === 'milestone'
+                    ? 'Adicionar marco'
                 : taskDraft.parentId
                   ? 'Nova subtarefa'
                   : 'Nova atividade'}
@@ -1090,7 +1157,9 @@ export function TrackingClient() {
               Pilar
               <select
                 value={taskDraft.pillar}
-                disabled={Boolean(taskDraft.id || taskDraft.parentId)}
+                disabled={Boolean(
+                  taskDraft.id || taskDraft.parentId || taskDialogPurpose === 'equipment',
+                )}
                 onChange={(event) =>
                   setTaskDraft((draft) => ({
                     ...draft,
@@ -1109,6 +1178,7 @@ export function TrackingClient() {
               Tipo
               <select
                 value={taskDraft.kind}
+                disabled={taskDialogPurpose === 'equipment' || taskDialogPurpose === 'milestone'}
                 onChange={(event) =>
                   setTaskDraft((draft) => ({
                     ...draft,
@@ -1136,7 +1206,11 @@ export function TrackingClient() {
               />
             </label>
             <label className="grid gap-2 text-sm font-semibold">
-              {taskTarget === 'project' ? 'Duração (dias)' : 'Duração padrão (dias)'}
+              {taskDraft.kind === 'milestone'
+                ? 'Duração do marco (dias)'
+                : taskTarget === 'project'
+                  ? 'Duração (dias)'
+                  : 'Duração padrão (dias)'}
               <Input
                 type="number"
                 min={0}
@@ -1151,7 +1225,7 @@ export function TrackingClient() {
               />
             </label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-              Atividade
+              {taskDialogPurpose === 'equipment' ? 'Nome do equipamento' : taskDraft.kind === 'milestone' ? 'Nome do marco' : 'Atividade'}
               <Input
                 value={taskDraft.title}
                 onChange={(event) =>
@@ -1174,6 +1248,38 @@ export function TrackingClient() {
                 }
               />
             </label>
+            {taskTarget === 'project' && taskDraft.kind !== 'group' && (
+              <>
+                <label className="grid gap-2 text-sm font-semibold">
+                  {taskDraft.kind === 'milestone' ? 'Data prevista' : 'Início previsto'}
+                  <Input
+                    type="date"
+                    value={taskDraft.startDate}
+                    onChange={(event) =>
+                      setTaskDraft((draft) => ({
+                        ...draft,
+                        startDate: event.target.value,
+                        endDate:
+                          draft.kind === 'milestone'
+                            ? event.target.value
+                            : draft.endDate,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-semibold">
+                  {taskDraft.kind === 'milestone' ? 'Data do marco' : 'Término previsto'}
+                  <Input
+                    type="date"
+                    value={taskDraft.endDate}
+                    disabled={taskDraft.kind === 'milestone'}
+                    onChange={(event) =>
+                      setTaskDraft((draft) => ({ ...draft, endDate: event.target.value }))
+                    }
+                  />
+                </label>
+              </>
+            )}
             {!taskDraft.id && (
               <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
                 {taskTarget === 'project'
@@ -1512,7 +1618,7 @@ function TaskName({ task, map }: { task: Task; map: Map<string, Task> }) {
         <ChevronRight size={14} className="shrink-0 text-slate-300" />
       )}
       {task.kind === 'milestone' && (
-        <CircleDot size={15} className="shrink-0 text-[#ed1c24]" />
+        <Star size={15} className="shrink-0 fill-[#ed1c24] text-[#ed1c24]" />
       )}
       <span
         className={
@@ -1686,22 +1792,22 @@ function ProjectScheduleTable({
     'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1760px] table-fixed text-left">
+      <table className="w-full min-w-[1560px] table-fixed text-left">
         <thead className="bg-slate-50 text-xs text-slate-500">
           <tr>
-            <th className="w-[60px] px-2 py-3">Item</th>
-            <th className="w-[228px] px-2 py-3">Atividade</th>
-            <th className="w-[112px] px-2 py-3">Responsável</th>
-            <th className="w-[90px] px-2 py-3">Predecessora</th>
-            <th className="w-[112px] px-2 py-3">Início previsto</th>
-            <th className="w-[112px] px-2 py-3">Término previsto</th>
-            <th className="w-[112px] px-2 py-3">Início real</th>
-            <th className="w-[112px] px-2 py-3">Término real</th>
-            <th className="w-[54px] px-2 py-3">Dias</th>
-            <th className="w-[80px] px-2 py-3">Progresso</th>
-            <th className="w-[108px] px-2 py-3">Status</th>
-            <th className="w-[166px] px-2 py-3">Ação vinculada</th>
-            <th className="w-[176px] px-2 py-3">Observação</th>
+            <th className="w-[54px] px-2 py-3">Item</th>
+            <th className="w-[218px] px-2 py-3">Atividade</th>
+            <th className="w-[104px] px-2 py-3">Responsável</th>
+            <th className="w-[84px] px-2 py-3">Predecessora</th>
+            <th className="w-[102px] px-2 py-3">Início previsto</th>
+            <th className="w-[102px] px-2 py-3">Término previsto</th>
+            <th className="w-[102px] px-2 py-3">Início real</th>
+            <th className="w-[102px] px-2 py-3">Término real</th>
+            <th className="w-[50px] px-2 py-3">Dias</th>
+            <th className="w-[74px] px-2 py-3">Progresso</th>
+            <th className="w-[94px] px-2 py-3">Status</th>
+            <th className="w-[146px] px-2 py-3">Ação vinculada</th>
+            <th className="w-[150px] px-2 py-3">Observação</th>
           </tr>
         </thead>
         <tbody

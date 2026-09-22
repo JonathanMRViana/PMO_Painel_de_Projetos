@@ -106,7 +106,6 @@ export async function POST(request: Request) {
     if (denied) return denied;
     const body = (await request.json()) as {
       name?: string;
-      startDate?: string;
       projectId?: string;
       parentId?: string | null;
       predecessorId?: string | null;
@@ -116,6 +115,8 @@ export async function POST(request: Request) {
       owner?: string;
       durationDays?: number;
       kind?: string;
+      startDate?: string;
+      endDate?: string;
     };
     if (body.projectId?.trim()) {
       const db = getDb();
@@ -141,6 +142,22 @@ export async function POST(request: Request) {
       const kind = ['task', 'milestone', 'group'].includes(String(body.kind))
         ? String(body.kind)
         : 'task';
+      const startDate = cleanDate(body.startDate);
+      let endDate = cleanDate(body.endDate);
+      let durationDays =
+        kind === 'group' || kind === 'milestone'
+          ? 0
+          : Math.max(1, Math.round(Number(body.durationDays ?? 1)));
+      if (kind === 'milestone' && startDate) endDate = startDate;
+      if (kind === 'task' && startDate && !endDate)
+        endDate = addDays(startDate, durationDays - 1);
+      if (kind === 'task' && startDate && endDate)
+        durationDays = daysInclusive(startDate, endDate);
+      if (startDate && endDate && endDate < startDate)
+        return Response.json(
+          { error: 'A data de término não pode ser anterior ao início.' },
+          { status: 400 },
+        );
       const taskId = crypto.randomUUID();
       const order = await db
         .prepare(
@@ -161,10 +178,10 @@ export async function POST(request: Request) {
           item,
           title,
           String(body.owner ?? '').trim(),
-          kind === 'group' ? 0 : Math.max(0, Math.round(Number(body.durationDays ?? 1))),
+          durationDays,
           body.predecessorId?.trim() || null,
-          '',
-          '',
+          startDate,
+          endDate,
           '',
           '',
           'Não planejado',
@@ -230,6 +247,25 @@ export async function POST(request: Request) {
             task.sortOrder,
           );
       }),
+      db
+        .prepare(
+          'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 0, NULL, ?, ?, 0, ?, ?, ?, ?)',
+        )
+        .bind(
+          `${projectId}:automatic:start`,
+          projectId,
+          'automatic:start',
+          'Empresa',
+          'M.0',
+          'INÍCIO DO PROJETO',
+          'PMO',
+          startDate,
+          startDate,
+          'Não iniciado',
+          '',
+          'milestone',
+          -1,
+        ),
     ];
     await db.batch(statements);
     const hubProject = await ensureProjectInBoard(name);
@@ -296,6 +332,12 @@ export async function PUT(request: Request) {
           { error: 'Projeto não encontrado.' },
           { status: 404 },
         );
+      await db
+        .prepare(
+          "UPDATE project_tracking_project_tasks SET start_date = ?, end_date = ? WHERE project_id = ? AND source_task_id = 'automatic:start'",
+        )
+        .bind(projectStartDate, projectStartDate, projectId)
+        .run();
       return Response.json({ updatedAt });
     }
 
