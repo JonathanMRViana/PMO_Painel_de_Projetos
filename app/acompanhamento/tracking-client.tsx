@@ -1856,6 +1856,7 @@ function ProjectScheduleTable({
   onCreateAction: (task: Task) => void;
   onDeleteEquipment: (task: Task) => void;
 }) {
+  const [editingPredecessorId, setEditingPredecessorId] = useState<string | null>(null);
   const map = new Map(tasks.map((task) => [task.id, task]));
   const choices = tasks.filter((task) => task.kind !== 'group');
   const plannedRange = (pillar: Pillar) => {
@@ -1961,6 +1962,17 @@ function ProjectScheduleTable({
                         <td className="px-3 py-2.5">
                           {summary ? (
                             '—'
+                          ) : !editable ? (
+                            <span className="text-xs">{map.get(task.predecessorId ?? '')?.item ?? 'Sem'}</span>
+                          ) : editingPredecessorId !== task.id ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-[#103f85] hover:underline"
+                              onClick={() => setEditingPredecessorId(task.id)}
+                              aria-label={`Alterar predecessora de ${task.title}`}
+                            >
+                              {map.get(task.predecessorId ?? '')?.item ?? 'Sem'}
+                            </button>
                           ) : (
                             <select
                               value={task.predecessorId ?? ''}
