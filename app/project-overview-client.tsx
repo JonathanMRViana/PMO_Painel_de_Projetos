@@ -14,6 +14,9 @@ type Project = {
   status: string;
   scheduleId: string | null;
   startDate: string;
+  contractStartDate: string;
+  lastScheduleDate: string;
+  bufferDays: number | null;
   actionCount: number;
   openActionCount: number;
 };
@@ -23,10 +26,13 @@ export function ProjectOverviewClient() {
   const [editor, setEditor] = useState(false);
   const [open, setOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [contractProject, setContractProject] = useState<Project | null>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#d8e5e5');
   const [status, setStatus] = useState('Em mobilização');
   const [startDate, setStartDate] = useState('');
+  const [contractStartDate, setContractStartDate] = useState('');
+  const [editingContractDate, setEditingContractDate] = useState('');
   const [password, setPassword] = useState('');
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -48,11 +54,11 @@ export function ProjectOverviewClient() {
     try {
       const response = await fetch('/api/project-tracking/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, startDate, color, status }),
+        body: JSON.stringify({ name, startDate, contractStartDate, color, status }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error || 'Não foi possível criar o projeto.');
-      setOpen(false); setName(''); setColor('#d8e5e5'); setStatus('Em mobilização'); setStartDate(''); await load();
+      setOpen(false); setName(''); setColor('#d8e5e5'); setStatus('Em mobilização'); setStartDate(''); setContractStartDate(''); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível criar o projeto.'); }
     finally { setSaving(false); }
   }
@@ -82,6 +88,21 @@ export function ProjectOverviewClient() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível atualizar o status.'); }
   }
 
+  async function saveContractDate() {
+    if (!editor || !contractProject) return;
+    setSaving(true); setError('');
+    try {
+      const response = await fetch('/api/project-overview', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: contractProject.code, contractStartDate: editingContractDate }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || 'Não foi possível salvar a data do contrato.');
+      setContractProject(null); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível salvar a data do contrato.'); }
+    finally { setSaving(false); }
+  }
+
   const visibleProjects = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR');
     if (!term) return projects;
@@ -100,7 +121,7 @@ export function ProjectOverviewClient() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5"><p className="text-sm font-semibold text-slate-600">{visibleProjects.length} {visibleProjects.length === 1 ? 'projeto' : 'projetos'}</p><label className="relative block w-full sm:w-72"><Search className="pointer-events-none absolute left-3 top-2.5 text-slate-400" size={16} /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Pesquisar projeto, código ou status" /></label></div>
         <div className="divide-y divide-slate-200">
         {visibleProjects.map((project) => <article key={project.code} className="flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-5 lg:flex-row lg:items-center">
-          <div className="flex min-w-0 flex-1 items-start gap-3"><span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#edf2fb] text-[#103f85]"><Folder size={21} fill={project.color} /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-base font-bold text-slate-800">{project.name}</h3><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} /></div><p className="mt-1 text-xs font-semibold text-slate-500">{project.code} · {project.scheduleId ? 'Cronograma criado' : 'Cronograma pendente'}</p></div></div>
+          <div className="flex min-w-0 flex-1 items-start gap-3"><span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#edf2fb] text-[#103f85]"><Folder size={21} fill={project.color} /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-base font-bold text-slate-800">{project.name}</h3><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} /></div><p className="mt-1 text-xs font-semibold text-slate-500">{project.code} · {project.scheduleId ? 'Cronograma criado' : 'Cronograma pendente'}</p><p className="mt-1 text-xs text-slate-500">Início do contrato: {project.contractStartDate ? new Date(`${project.contractStartDate}T12:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'não informado'}{editor && <button type="button" className="ml-2 font-semibold text-[#103f85] hover:underline" onClick={() => { setContractProject(project); setEditingContractDate(project.contractStartDate); }}>Editar</button>}</p></div></div>
           <div className="flex shrink-0 gap-4 text-sm"><span><b className="text-slate-800">{project.openActionCount}</b> abertas</span><span><b className="text-slate-800">{project.actionCount}</b> ações</span></div>
           <div className="flex min-w-[170px] shrink-0 items-center gap-2">{editor ? <select value={project.status} onChange={(event) => void changeStatus(project, event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"><option>Em mobilização</option><option>Concluído</option><option>Cancelado</option></select> : <span className="rounded-full bg-[#edf2fb] px-3 py-1.5 text-xs font-bold text-[#103f85]">{project.status}</span>}</div>
           <div className="grid shrink-0 grid-cols-2 gap-2 lg:w-[272px]">
@@ -117,7 +138,8 @@ export function ProjectOverviewClient() {
         {visibleProjects.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">Nenhum projeto encontrado.</p>}</div>
       </div>}
       <Dialog open={authOpen} onOpenChange={setAuthOpen}><DialogContent><DialogHeader><DialogTitle>Acessar edição</DialogTitle><DialogDescription>Informe a senha do PMO para criar ou editar projetos.</DialogDescription></DialogHeader><label className="grid gap-2 text-sm font-semibold">Senha<Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void authenticate(); }} autoFocus /></label>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setAuthOpen(false)}>Cancelar</Button><Button disabled={saving || !password} onClick={() => void authenticate()}>{saving ? 'Validando...' : 'Entrar'}</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Novo projeto</DialogTitle><DialogDescription>O projeto receberá o cronograma padrão com contrato, frota, mão de obra, informações legais e CFI.</DialogDescription></DialogHeader><div className="grid gap-4"><label className="grid gap-2 text-sm font-semibold">Nome do projeto<Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: VALE S11D" autoFocus /></label><label className="grid gap-2 text-sm font-semibold">Início do projeto<Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label className="grid gap-2 text-sm font-semibold">Status inicial<select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 font-normal"><option>Em mobilização</option><option>Concluído</option><option>Cancelado</option></select></label><label className="grid gap-2 text-sm font-semibold">Cor do projeto<input className="h-10 w-full rounded-lg border border-slate-200 bg-white p-1" type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label></div>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button disabled={saving || name.trim().length < 2 || !startDate} onClick={() => void createProject()}>{saving ? 'Criando...' : 'Criar projeto'}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={contractProject !== null} onOpenChange={(opened) => { if (!opened) setContractProject(null); }}><DialogContent><DialogHeader><DialogTitle>Início do contrato · {contractProject?.name}</DialogTitle><DialogDescription>O buffer compara esta data com o último término previsto do cronograma.</DialogDescription></DialogHeader><label className="grid gap-2 text-sm font-semibold">Data de início do contrato<Input type="date" value={editingContractDate} onChange={(event) => setEditingContractDate(event.target.value)} /></label>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setContractProject(null)}>Cancelar</Button><Button disabled={saving} onClick={() => void saveContractDate()}>{saving ? 'Salvando...' : 'Salvar data'}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Novo projeto</DialogTitle><DialogDescription>O projeto receberá o cronograma padrão com contrato, frota, mão de obra, informações legais e CFI.</DialogDescription></DialogHeader><div className="grid gap-4"><label className="grid gap-2 text-sm font-semibold">Nome do projeto<Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: VALE S11D" autoFocus /></label><label className="grid gap-2 text-sm font-semibold">Início do projeto<Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label className="grid gap-2 text-sm font-semibold">Início do contrato<Input type="date" value={contractStartDate} onChange={(event) => setContractStartDate(event.target.value)} /></label><label className="grid gap-2 text-sm font-semibold">Status inicial<select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 font-normal"><option>Em mobilização</option><option>Concluído</option><option>Cancelado</option></select></label><label className="grid gap-2 text-sm font-semibold">Cor do projeto<input className="h-10 w-full rounded-lg border border-slate-200 bg-white p-1" type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label></div>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button disabled={saving || name.trim().length < 2 || !startDate} onClick={() => void createProject()}>{saving ? 'Criando...' : 'Criar projeto'}</Button></DialogFooter></DialogContent></Dialog>
     </section>
   );
 }

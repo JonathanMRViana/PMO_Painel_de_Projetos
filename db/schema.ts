@@ -120,6 +120,7 @@ export const pmoProjects = sqliteTable(
     name: text('name').notNull(),
     color: text('color').notNull().default('#d8e5e5'),
     status: text('status').notNull().default('Planejamento'),
+    contractStartDate: text('contract_start_date').notNull().default(''),
     createdAt: text('created_at').notNull().default('CURRENT_TIMESTAMP'),
     updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
   },

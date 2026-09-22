@@ -19,6 +19,7 @@ export type ProjectRecord = {
   name: string;
   color: string;
   status: string;
+  contractStartDate: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -41,12 +42,12 @@ export async function findProjectByName(name: string) {
   const normalized = normalizeName(name);
   if (!normalized) return null;
   const row = await getDb()
-    .prepare('SELECT id, code, name, color, status, created_at, updated_at FROM pmo_projects WHERE lower(name) = lower(?)')
+    .prepare('SELECT id, code, name, color, status, contract_start_date, created_at, updated_at FROM pmo_projects WHERE lower(name) = lower(?)')
     .bind(normalized)
     .first<Record<string, unknown>>();
   return row ? {
     id: String(row.id), code: String(row.code), name: String(row.name),
-    color: String(row.color || fallbackColor), status: normalizeProjectStatus(String(row.status || '')), createdAt: String(row.created_at || ''), updatedAt: String(row.updated_at || ''),
+    color: String(row.color || fallbackColor), status: normalizeProjectStatus(String(row.status || '')), contractStartDate: String(row.contract_start_date || ''), createdAt: String(row.created_at || ''), updatedAt: String(row.updated_at || ''),
   } satisfies ProjectRecord : null;
 }
 
@@ -56,7 +57,7 @@ export async function ensureProjectRecord(name: string, color = fallbackColor) {
   const found = await findProjectByName(normalized);
   if (found) return found;
   const record: ProjectRecord = {
-    id: crypto.randomUUID(), code: await nextProjectCode(), name: normalized, color, status: 'Em mobilização',
+    id: crypto.randomUUID(), code: await nextProjectCode(), name: normalized, color, status: 'Em mobilização', contractStartDate: '',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   await getDb().prepare('INSERT INTO pmo_projects (id, code, name, color, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -83,6 +84,21 @@ export async function updateProjectStatus(name: string, status: string) {
     .bind(value, new Date().toISOString(), name.trim()).run();
 }
 
+export async function updateContractStartDate(code: string, date: string) {
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Informe uma data contratual válida.');
+  const result = await getDb().prepare('UPDATE pmo_projects SET contract_start_date = ?, updated_at = ? WHERE code = ?')
+    .bind(date, new Date().toISOString(), code).run();
+  if (!result.meta.changes) throw new Error('Projeto não encontrado.');
+}
+
+function bufferDays(contractDate: string, scheduleDate: string) {
+  if (!contractDate || !scheduleDate) return null;
+  const contractTime = Date.parse(`${contractDate}T00:00:00Z`);
+  const scheduleTime = Date.parse(`${scheduleDate}T00:00:00Z`);
+  if (!Number.isFinite(contractTime) || !Number.isFinite(scheduleTime)) return null;
+  return Math.round((contractTime - scheduleTime) / 86_400_000);
+}
+
 export async function ensureProjectRegistry() {
   const db = getDb();
   const [catalog, schedules] = await Promise.all([
@@ -102,10 +118,11 @@ export async function ensureProjectRegistry() {
 export async function readProjectOverview() {
   const db = getDb();
   await ensureProjectRegistry();
-  const [projects, schedules, actionCounts] = await Promise.all([
-    db.prepare('SELECT id, code, name, color, status, created_at, updated_at FROM pmo_projects ORDER BY created_at DESC, name').all(),
+  const [projects, schedules, actionCounts, lastScheduleDates] = await Promise.all([
+    db.prepare('SELECT id, code, name, color, status, contract_start_date, created_at, updated_at FROM pmo_projects ORDER BY created_at DESC, name').all(),
     db.prepare('SELECT id, name, project_code, start_date, created_at, updated_at FROM project_tracking_projects ORDER BY created_at DESC, name').all(),
     db.prepare('SELECT project_code, COUNT(*) AS total, SUM(CASE WHEN completed = 0 THEN 1 ELSE 0 END) AS open_total FROM postit_actions GROUP BY project_code').all(),
+    db.prepare("SELECT project.project_code, MAX(task.end_date) AS last_date FROM project_tracking_projects AS project INNER JOIN project_tracking_project_tasks AS task ON task.project_id = project.id WHERE task.kind != 'group' AND task.end_date != '' GROUP BY project.project_code").all(),
   ]);
   const schedulesByCode = new Map(
     schedules.results.map((row) => [String(row.project_code), row]),
@@ -113,15 +130,21 @@ export async function readProjectOverview() {
   const actionsByCode = new Map(
     actionCounts.results.map((row) => [String(row.project_code), row]),
   );
+  const lastDateByCode = new Map(lastScheduleDates.results.map((row) => [String(row.project_code), String(row.last_date || '')]));
   return projects.results
     .map((project) => {
       const code = String(project.code);
       const schedule = schedulesByCode.get(code) as Record<string, unknown> | undefined;
       const actions = actionsByCode.get(code) as Record<string, unknown> | undefined;
+      const contractStartDate = String(project.contract_start_date || '');
+      const lastScheduleDate = lastDateByCode.get(code) || '';
       return {
         id: String(project.id), code, name: String(project.name), color: String(project.color || fallbackColor), status: normalizeProjectStatus(String(project.status || '')), createdAt: String(project.created_at || ''),
         scheduleId: schedule ? String(schedule.id) : null,
         startDate: schedule ? String(schedule.start_date || '') : '',
+        contractStartDate,
+        lastScheduleDate,
+        bufferDays: bufferDays(contractStartDate, lastScheduleDate),
         updatedAt: schedule ? String(schedule.updated_at || '') : String(project.updated_at || project.created_at || ''),
         actionCount: Number(actions?.total || 0),
         openActionCount: Number(actions?.open_total || 0),

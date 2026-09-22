@@ -59,6 +59,7 @@ type Action = {
 };
 type DateHistory = { id: string; previousDate: string; newDate: string; changedAt: string };
 type HoveredAction = { action: Action; x: number; y: number };
+type ProjectBuffer = { code: string; name: string; contractStartDate: string; lastScheduleDate: string; bufferDays: number | null };
 const days: { id: Day; label: string }[] = [
   { id: 'seg', label: 'Segunda' },
   { id: 'ter', label: 'Terça' },
@@ -317,6 +318,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [viewing, setViewing] = useState<Action | null>(null),
     [hovered, setHovered] = useState<HoveredAction | null>(null),
     [projects, setProjects] = useState<Project[]>(defaultProjects),
+    [projectBuffers, setProjectBuffers] = useState<ProjectBuffer[]>([]),
     [sectors, setSectors] = useState<Sector[]>(defaultSectors),
     [projectColors, setProjectColors] = useState<Record<string, string>>({}),
     [selectedProject, setSelectedProject] = useState<string | null>(null),
@@ -358,9 +360,10 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     setLoading(true);
     setError(null);
     try {
-      const [r, catalogResponse] = await Promise.all([
+      const [r, catalogResponse, overviewResponse] = await Promise.all([
         fetch('/api/postit-actions', { cache: 'no-store' }),
         fetch('/api/postit-catalog', { cache: 'no-store' }),
+        fetch('/api/project-overview', { cache: 'no-store' }),
       ]);
       const data = (await r.json()) as { actions?: Action[]; error?: string };
       const catalog = (await catalogResponse.json()) as { projects?: { name: string; color?: string }[]; sectors?: { name: string }[] };
@@ -370,6 +373,10 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
         setProjects(uniqueCatalogNames(catalog.projects?.map((item) => item.name) || defaultProjects));
         setSectors(uniqueCatalogNames(catalog.sectors?.map((item) => item.name) || defaultSectors));
         setProjectColors(Object.fromEntries((catalog.projects || []).map((item) => [item.name, item.color || '#d8e5e5'])));
+      }
+      if (overviewResponse.ok) {
+        const overview = (await overviewResponse.json()) as { projects?: ProjectBuffer[] };
+        setProjectBuffers(overview.projects || []);
       }
       if (data.actions?.length) {
         const normalized = data.actions.map((action) =>
@@ -843,7 +850,22 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           <div className={styles.cardTitle}>
             <CheckCircle2 size={16} /> Buffer por projeto
           </div>
-          <p>—</p>
+          <div className={styles.contractBufferList}>
+            {projectBuffers
+              .filter((project) => !selectedProject || projectIdentity(project.name) === projectIdentity(selectedProject))
+              .map((project) => (
+                <div key={project.code} title={`Início do contrato: ${project.contractStartDate || 'não informado'} · Último término previsto: ${project.lastScheduleDate || 'não informado'}`}>
+                  <span>{project.name}</span>
+                  <strong className={project.bufferDays == null ? styles.bufferMissing : project.bufferDays < 0 ? styles.bufferNegative : styles.bufferPositive}>
+                    {project.bufferDays == null
+                      ? !project.contractStartDate ? 'Início contratual pendente' : 'Cronograma pendente'
+                      : `${project.bufferDays > 0 ? '+' : ''}${project.bufferDays} ${Math.abs(project.bufferDays) === 1 ? 'dia' : 'dias'}`}
+                  </strong>
+                </div>
+              ))}
+            {!projectBuffers.length && <span className={styles.bufferMissing}>Nenhum projeto cadastrado.</span>}
+          </div>
+          <p>Início do contrato menos último término previsto do cronograma.</p>
         </div>
         <div className={[styles.controlCard, styles.attentionCard].join(' ')}>
           <div className={styles.cardTitle}>

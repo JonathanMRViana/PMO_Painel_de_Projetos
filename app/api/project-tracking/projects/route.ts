@@ -5,7 +5,7 @@ import {
   rowToTrackingTask,
   trackingError,
 } from '@/lib/project-tracking-db';
-import { ensureProjectInBoard, isProjectStatus, normalizeProjectStatus, updateProjectStatus } from '@/lib/project-hub';
+import { ensureProjectInBoard, isProjectStatus, normalizeProjectStatus, updateContractStartDate, updateProjectStatus } from '@/lib/project-hub';
 import { syncScheduleActions } from '@/lib/schedule-action-sync';
 import { syncOprFleetsFromSchedules } from '@/lib/opr-fleet-sync';
 
@@ -120,6 +120,7 @@ export async function POST(request: Request) {
       endDate?: string;
       color?: string;
       status?: string;
+      contractStartDate?: string;
     };
     if (body.projectId?.trim()) {
       const db = getDb();
@@ -205,6 +206,9 @@ export async function POST(request: Request) {
       );
     if (body.status !== undefined && !isProjectStatus(String(body.status)))
       return Response.json({ error: 'Status de projeto inválido.' }, { status: 400 });
+    const contractStartDate = String(body.contractStartDate ?? '').trim();
+    if (contractStartDate && !datePattern.test(contractStartDate))
+      return Response.json({ error: 'Informe uma data de início do contrato válida.' }, { status: 400 });
     const color = /^#[0-9a-f]{6}$/i.test(String(body.color ?? ''))
       ? String(body.color)
       : undefined;
@@ -279,6 +283,7 @@ export async function POST(request: Request) {
     await db.batch(statements);
     const hubProject = await ensureProjectInBoard(name, color);
     await updateProjectStatus(hubProject.name, normalizeProjectStatus(String(body.status ?? '')));
+    if (contractStartDate) await updateContractStartDate(hubProject.code, contractStartDate);
     await db.prepare('UPDATE project_tracking_projects SET project_code = ? WHERE id = ?').bind(hubProject.code, projectId).run();
     if (startDate) await syncScheduleActions(projectId, name, hubProject.code);
     return Response.json(
