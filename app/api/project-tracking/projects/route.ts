@@ -5,7 +5,7 @@ import {
   rowToTrackingTask,
   trackingError,
 } from '@/lib/project-tracking-db';
-import { ensureProjectInBoard } from '@/lib/project-hub';
+import { ensureProjectInBoard, isProjectStatus, normalizeProjectStatus, updateProjectStatus } from '@/lib/project-hub';
 import { syncScheduleActions } from '@/lib/schedule-action-sync';
 import { syncOprFleetsFromSchedules } from '@/lib/opr-fleet-sync';
 
@@ -118,6 +118,8 @@ export async function POST(request: Request) {
       kind?: string;
       startDate?: string;
       endDate?: string;
+      color?: string;
+      status?: string;
     };
     if (body.projectId?.trim()) {
       const db = getDb();
@@ -201,6 +203,11 @@ export async function POST(request: Request) {
         { error: 'Informe um nome de projeto entre 2 e 80 caracteres.' },
         { status: 400 },
       );
+    if (body.status !== undefined && !isProjectStatus(String(body.status)))
+      return Response.json({ error: 'Status de projeto inválido.' }, { status: 400 });
+    const color = /^#[0-9a-f]{6}$/i.test(String(body.color ?? ''))
+      ? String(body.color)
+      : undefined;
 
     const template = await readStandardTemplate();
     const db = getDb();
@@ -270,7 +277,8 @@ export async function POST(request: Request) {
         ),
     ];
     await db.batch(statements);
-    const hubProject = await ensureProjectInBoard(name);
+    const hubProject = await ensureProjectInBoard(name, color);
+    await updateProjectStatus(hubProject.name, normalizeProjectStatus(String(body.status ?? '')));
     await db.prepare('UPDATE project_tracking_projects SET project_code = ? WHERE id = ?').bind(hubProject.code, projectId).run();
     if (startDate) await syncScheduleActions(projectId, name, hubProject.code);
     return Response.json(

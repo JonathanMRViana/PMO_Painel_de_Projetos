@@ -2,7 +2,7 @@
 import '@/lib/github-pages-api';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ClipboardList, Folder, FolderKanban, Plus, Search } from 'lucide-react';
+import { CalendarDays, ClipboardList, Folder, FolderKanban, KeyRound, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -22,9 +22,12 @@ export function ProjectOverviewClient() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [editor, setEditor] = useState(false);
   const [open, setOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#d8e5e5');
   const [status, setStatus] = useState('Em mobilização');
+  const [startDate, setStartDate] = useState('');
+  const [password, setPassword] = useState('');
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -43,14 +46,28 @@ export function ProjectOverviewClient() {
     setSaving(true);
     setError('');
     try {
-      const response = await fetch('/api/postit-catalog', {
+      const response = await fetch('/api/project-tracking/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'project', name, color, status }),
+        body: JSON.stringify({ name, startDate, color, status }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error || 'Não foi possível criar o projeto.');
-      setOpen(false); setName(''); setColor('#d8e5e5'); setStatus('Em mobilização'); await load();
+      setOpen(false); setName(''); setColor('#d8e5e5'); setStatus('Em mobilização'); setStartDate(''); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível criar o projeto.'); }
+    finally { setSaving(false); }
+  }
+
+  async function authenticate() {
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch('/api/editor-session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+      });
+      const data = await response.json() as { authenticated?: boolean; error?: string };
+      if (!response.ok || !data.authenticated) throw new Error(data.error || 'Não foi possível acessar a edição.');
+      setPassword(''); setAuthOpen(false); setEditor(true); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível acessar a edição.'); }
     finally { setSaving(false); }
   }
 
@@ -72,9 +89,10 @@ export function ProjectOverviewClient() {
   }, [projects, search]);
 
   return (
-    <section className="mt-9">
+    <section className="mt-5">
       <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
         {editor && <Button onClick={() => setOpen(true)}><Plus /> Novo projeto</Button>}
+        {!editor && <Button variant="outline" onClick={() => setAuthOpen(true)}><KeyRound /> Acessar edição</Button>}
       </div>
       {projects.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center"><FolderKanban className="mx-auto text-[#103f85]" size={30} /><p className="mt-3 font-semibold">Nenhum projeto cadastrado.</p><p className="mt-1 text-sm text-slate-600">Crie o primeiro projeto para organizar cronograma e ações.</p></div>
@@ -98,7 +116,8 @@ export function ProjectOverviewClient() {
         </article>)}
         {visibleProjects.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">Nenhum projeto encontrado.</p>}</div>
       </div>}
-      <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Novo projeto</DialogTitle><DialogDescription>A pasta ficará disponível na visão geral, no cronograma e no quadro de ações.</DialogDescription></DialogHeader><label className="grid gap-2 text-sm font-semibold">Nome do projeto<Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: VALE S11D" autoFocus /></label><label className="grid gap-2 text-sm font-semibold">Status inicial<select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 font-normal"><option>Em mobilização</option><option>Concluído</option><option>Cancelado</option></select></label><label className="grid gap-2 text-sm font-semibold">Cor do projeto<input className="h-10 w-full rounded-lg border border-slate-200 bg-white p-1" type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button disabled={saving || name.trim().length < 2} onClick={() => void createProject()}>{saving ? 'Criando...' : 'Criar projeto'}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={authOpen} onOpenChange={setAuthOpen}><DialogContent><DialogHeader><DialogTitle>Acessar edição</DialogTitle><DialogDescription>Informe a senha do PMO para criar ou editar projetos.</DialogDescription></DialogHeader><label className="grid gap-2 text-sm font-semibold">Senha<Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void authenticate(); }} autoFocus /></label>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setAuthOpen(false)}>Cancelar</Button><Button disabled={saving || !password} onClick={() => void authenticate()}>{saving ? 'Validando...' : 'Entrar'}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Novo projeto</DialogTitle><DialogDescription>O projeto receberá o cronograma padrão com contrato, frota, mão de obra, informações legais e CFI.</DialogDescription></DialogHeader><div className="grid gap-4"><label className="grid gap-2 text-sm font-semibold">Nome do projeto<Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: VALE S11D" autoFocus /></label><label className="grid gap-2 text-sm font-semibold">Início do projeto<Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label className="grid gap-2 text-sm font-semibold">Status inicial<select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 font-normal"><option>Em mobilização</option><option>Concluído</option><option>Cancelado</option></select></label><label className="grid gap-2 text-sm font-semibold">Cor do projeto<input className="h-10 w-full rounded-lg border border-slate-200 bg-white p-1" type="color" value={color} onChange={(e) => setColor(e.target.value)} /></label></div>{error && <p className="text-sm text-red-600">{error}</p>}<DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button disabled={saving || name.trim().length < 2 || !startDate} onClick={() => void createProject()}>{saving ? 'Criando...' : 'Criar projeto'}</Button></DialogFooter></DialogContent></Dialog>
     </section>
   );
 }
