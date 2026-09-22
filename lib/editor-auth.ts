@@ -1,4 +1,6 @@
 const cookieName = 'pmo_editor_session';
+const sessionLifetimeMs = 7_200_000;
+const sessionVersion = 'v2';
 
 function secret() {
   const value = process.env.EDITOR_PASSWORD;
@@ -6,21 +8,29 @@ function secret() {
   return value;
 }
 
-async function sessionToken() {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(`${secret()}:pmo-editor-session-v1`),
-  );
-  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
-}
-
-async function apiToken(expiresAt: number) {
+async function sign(value: string) {
   const key = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(secret()), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`pmo-editor-api-v1:${expiresAt}`));
-  const encoded = Array.from(new Uint8Array(signature), (value) => value.toString(16).padStart(2, '0')).join('');
-  return `${expiresAt}.${encoded}`;
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(signature), (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function randomNonce() {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+async function safeEqual(left: string, right: string) {
+  const [leftHash, rightHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(left)),
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(right)),
+  ]);
+  const a = new Uint8Array(leftHash);
+  const b = new Uint8Array(rightHash);
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
+  return difference === 0;
 }
 
 function readCookie(request: Request, name: string) {
@@ -28,12 +38,10 @@ function readCookie(request: Request, name: string) {
 }
 
 export async function isEditor(request: Request) {
-  if (readCookie(request, cookieName) === await sessionToken()) return true;
-  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
-  const [expiresAtText] = bearer.split('.');
+  const [version, expiresAtText, nonce, signature] = readCookie(request, cookieName).split('.');
   const expiresAt = Number(expiresAtText);
-  if (!Number.isFinite(expiresAt) || expiresAt < Date.now() || expiresAt > Date.now() + 28_800_000) return false;
-  return bearer === await apiToken(expiresAt);
+  if (version !== sessionVersion || !nonce || !signature || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return false;
+  return safeEqual(signature, await sign(`pmo-editor-session:${version}:${expiresAt}:${nonce}`));
 }
 
 export async function requireEditor(request: Request) {
@@ -42,11 +50,12 @@ export async function requireEditor(request: Request) {
 }
 
 export async function createEditorSession(password: string) {
-  if (password !== secret()) return null;
-  const expiresAt = Date.now() + 28_800_000;
+  if (!await safeEqual(password, secret())) return null;
+  const expiresAt = Date.now() + sessionLifetimeMs;
+  const nonce = randomNonce();
+  const signature = await sign(`pmo-editor-session:${sessionVersion}:${expiresAt}:${nonce}`);
   return {
-    cookie: `${cookieName}=${await sessionToken()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`,
-    token: await apiToken(expiresAt),
+    cookie: `${cookieName}=${sessionVersion}.${expiresAt}.${nonce}.${signature}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${sessionLifetimeMs / 1000}`,
   };
 }
 

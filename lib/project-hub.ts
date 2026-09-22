@@ -1,6 +1,17 @@
 import { getDb } from '@/db';
 
 const fallbackColor = '#d8e5e5';
+export const projectStatuses = ['Em mobilização', 'Concluído', 'Cancelado'] as const;
+export type ProjectStatus = (typeof projectStatuses)[number];
+
+export function isProjectStatus(status: string): status is ProjectStatus {
+  return projectStatuses.includes(status as ProjectStatus);
+}
+
+export function normalizeProjectStatus(status: string): ProjectStatus {
+  if (isProjectStatus(status)) return status;
+  return status.trim().toLocaleLowerCase('pt-BR') === 'bloqueado' ? 'Cancelado' : 'Em mobilização';
+}
 
 export type ProjectRecord = {
   id: string;
@@ -35,7 +46,7 @@ export async function findProjectByName(name: string) {
     .first<Record<string, unknown>>();
   return row ? {
     id: String(row.id), code: String(row.code), name: String(row.name),
-    color: String(row.color || fallbackColor), status: String(row.status || 'Planejamento'), createdAt: String(row.created_at || ''), updatedAt: String(row.updated_at || ''),
+    color: String(row.color || fallbackColor), status: normalizeProjectStatus(String(row.status || '')), createdAt: String(row.created_at || ''), updatedAt: String(row.updated_at || ''),
   } satisfies ProjectRecord : null;
 }
 
@@ -45,7 +56,7 @@ export async function ensureProjectRecord(name: string, color = fallbackColor) {
   const found = await findProjectByName(normalized);
   if (found) return found;
   const record: ProjectRecord = {
-    id: crypto.randomUUID(), code: await nextProjectCode(), name: normalized, color, status: 'Planejamento',
+    id: crypto.randomUUID(), code: await nextProjectCode(), name: normalized, color, status: 'Em mobilização',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   await getDb().prepare('INSERT INTO pmo_projects (id, code, name, color, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -67,7 +78,7 @@ export async function ensureProjectInBoard(name: string, color = fallbackColor) 
 }
 
 export async function updateProjectStatus(name: string, status: string) {
-  const value = status.trim().slice(0, 40) || 'Planejamento';
+  const value = normalizeProjectStatus(status);
   await getDb().prepare('UPDATE pmo_projects SET status = ?, updated_at = ? WHERE lower(name) = lower(?)')
     .bind(value, new Date().toISOString(), name.trim()).run();
 }
@@ -82,6 +93,7 @@ export async function ensureProjectRegistry() {
     await ensureProjectRecord(String(row.name), String(row.color || fallbackColor));
   }
   await db.batch([
+    db.prepare("UPDATE pmo_projects SET status = CASE WHEN status IN ('Concluído', 'Cancelado') THEN status WHEN lower(trim(status)) = 'bloqueado' THEN 'Cancelado' ELSE 'Em mobilização' END, updated_at = CURRENT_TIMESTAMP WHERE status NOT IN ('Em mobilização', 'Concluído', 'Cancelado')"),
     db.prepare("UPDATE project_tracking_projects SET project_code = COALESCE((SELECT code FROM pmo_projects WHERE lower(pmo_projects.name) = lower(project_tracking_projects.name)), '') WHERE project_code = ''"),
     db.prepare("UPDATE postit_actions SET project_code = COALESCE((SELECT code FROM pmo_projects WHERE lower(pmo_projects.name) = lower(postit_actions.project)), '') WHERE project_code = ''"),
   ]);
@@ -107,7 +119,7 @@ export async function readProjectOverview() {
       const schedule = schedulesByCode.get(code) as Record<string, unknown> | undefined;
       const actions = actionsByCode.get(code) as Record<string, unknown> | undefined;
       return {
-        id: String(project.id), code, name: String(project.name), color: String(project.color || fallbackColor), status: String(project.status || 'Planejamento'), createdAt: String(project.created_at || ''),
+        id: String(project.id), code, name: String(project.name), color: String(project.color || fallbackColor), status: normalizeProjectStatus(String(project.status || '')), createdAt: String(project.created_at || ''),
         scheduleId: schedule ? String(schedule.id) : null,
         startDate: schedule ? String(schedule.start_date || '') : '',
         updatedAt: schedule ? String(schedule.updated_at || '') : String(project.updated_at || project.created_at || ''),

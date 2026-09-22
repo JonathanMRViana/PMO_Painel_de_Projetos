@@ -1,6 +1,6 @@
 import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
-import { ensureProjectInBoard, ensureProjectRecord, updateProjectStatus } from '@/lib/project-hub';
+import { ensureProjectInBoard, ensureProjectRecord, isProjectStatus, normalizeProjectStatus, updateProjectStatus } from '@/lib/project-hub';
 
 const defaultSectors = [
   'Manutenção',
@@ -114,6 +114,8 @@ export async function POST(request: Request) {
     const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
     if (!type || !name || name.length > 40)
       throw new Error('Informe um nome de até 40 caracteres.');
+    if (type === 'project' && body.status !== undefined && !isProjectStatus(String(body.status)))
+      throw new Error('Status de projeto inválido.');
     const duplicate = await getDb()
       .prepare(
         'SELECT id FROM postit_board_catalog WHERE type = ? AND lower(name) = lower(?)',
@@ -123,7 +125,7 @@ export async function POST(request: Request) {
     if (duplicate) throw new Error('Este cadastro já existe.');
     if (type === 'project') {
       const project = await ensureProjectInBoard(name, body.color || '#d8e5e5');
-      await updateProjectStatus(project.name, body.status || 'Planejamento');
+      await updateProjectStatus(project.name, normalizeProjectStatus(String(body.status || '')));
       return Response.json({ item: { id: project.id, type, name: project.name, color: project.color, code: project.code } }, { status: 201 });
     }
     const item = { id: crypto.randomUUID(), type, name, color: null };
@@ -156,6 +158,8 @@ export async function PUT(request: Request) {
     const oldName = body.oldName?.trim() ?? '';
     const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
     if (!type || !oldName || !name || name.length > 40) throw new Error('Informe um nome de até 40 caracteres.');
+    if (type === 'project' && body.status !== undefined && !isProjectStatus(String(body.status)))
+      throw new Error('Status de projeto inválido.');
     if (name !== oldName) {
       const duplicate = await getDb().prepare('SELECT id FROM postit_board_catalog WHERE type = ? AND lower(name) = lower(?)').bind(type, name).first();
       if (duplicate) throw new Error(`Este ${type === 'project' ? 'projeto' : 'setor'} já existe.`);
@@ -174,7 +178,7 @@ export async function PUT(request: Request) {
           db.prepare('UPDATE postit_actions SET sector = ? WHERE sector = ?').bind(name, oldName),
         ]);
     const project = type === 'project' ? await ensureProjectRecord(name, color || '#d8e5e5') : null;
-    if (type === 'project' && body.status !== undefined) await updateProjectStatus(name, body.status);
+    if (type === 'project' && body.status !== undefined) await updateProjectStatus(name, normalizeProjectStatus(String(body.status)));
     return Response.json({ item: { type, name, color, code: project?.code }, oldName });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível atualizar o cadastro.' }, { status: 400 });

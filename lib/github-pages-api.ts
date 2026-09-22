@@ -8,6 +8,8 @@ function isGitHubPages() {
 }
 
 if (typeof window !== 'undefined' && isGitHubPages() && !window.__pmoApiPatched) {
+  // O espelho do GitHub Pages é somente consulta: nunca mantém um acesso de edição.
+  window.sessionStorage.removeItem(tokenKey);
   const nativeFetch = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
     const path = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
@@ -15,17 +17,11 @@ if (typeof window !== 'undefined' && isGitHubPages() && !window.__pmoApiPatched)
     if (!isApi) return nativeFetch(input, init);
 
     const headers = new Headers(init.headers);
-    const token = window.sessionStorage.getItem(tokenKey);
-    if (token) headers.set('Authorization', `Bearer ${token}`);
     const response = await nativeFetch(`${apiOrigin}${path}`, { ...init, headers });
 
     if (path === '/api/editor-session') {
       if (init.method === 'DELETE') window.sessionStorage.removeItem(tokenKey);
-      if (init.method === 'POST' && response.ok) {
-        void response.clone().json().then((data: { token?: string }) => {
-          if (data.token) window.sessionStorage.setItem(tokenKey, data.token);
-        });
-      }
+      if (init.method === 'POST' && response.ok) window.sessionStorage.removeItem(tokenKey);
     }
     return response;
   };
