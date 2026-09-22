@@ -925,6 +925,14 @@ export function TrackingClient() {
           </div>
         )}
 
+        {view === 'projects' && projectTasks.some(
+          (task) => task.startDate && task.endDate && task.endDate < task.startDate,
+        ) && (
+          <p role="status" className="mt-4 text-sm font-medium text-amber-800">
+            Há atividades com término previsto anterior ao início na planilha. Revise essas datas no cronograma.
+          </p>
+        )}
+
         <section
           className="mt-7 grid gap-4 md:grid-cols-3"
           aria-label="Pilares do modelo"
