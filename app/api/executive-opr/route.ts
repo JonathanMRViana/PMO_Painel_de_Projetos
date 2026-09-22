@@ -1,6 +1,7 @@
 import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
 import { syncOprFleetsFromSchedules } from '@/lib/opr-fleet-sync';
+import { ensureProjectSchedule } from '@/lib/project-schedule';
 
 const fields = [
   'client', 'fleet', 'description', 'plannedDate', 'matrixArrivalDate',
@@ -66,17 +67,52 @@ export async function POST(request: Request) {
     const fleet = clean(body.fleet);
     if (!projectCode) return Response.json({ error: 'Selecione um projeto.' }, { status: 400 });
     if (!fleet) return Response.json({ error: 'Informe a frota.' }, { status: 400 });
-    const now = new Date().toISOString();
-    const id = crypto.randomUUID();
     const values = fields.map((field) => clean(body[field]));
-    await getDb().prepare(`INSERT INTO project_opr_fleets (
-      id, project_code, client, fleet, description, planned_date, matrix_arrival_date,
-      fleet_definition, basic_kit, maintenance_release, configuration, acquisition,
-      adaptations, fleet_documentation, team_definition, badge, team_documentation,
-      pgr_pcmso, legal_documents, client_inspection, billing, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, projectCode, ...values, now, now).run();
-    const record = await getDb().prepare(`SELECT ${selectColumns} FROM project_opr_fleets WHERE id = ?`).bind(id).first<Record<string, unknown>>();
+    const db = getDb();
+    const project = await ensureProjectSchedule(projectCode);
+    const [equipmentRows, parent, order] = await Promise.all([
+      db.prepare("SELECT item FROM project_tracking_project_tasks WHERE project_id = ? AND item GLOB 'EQ.*'").bind(project.id).all<{ item: string }>(),
+      db.prepare("SELECT id FROM project_tracking_project_tasks WHERE project_id = ? AND pillar = 'Equipamentos' AND kind = 'group' AND upper(title) LIKE '%FROTA%' ORDER BY sort_order LIMIT 1").bind(project.id).first<{ id: string }>(),
+      db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS total FROM project_tracking_project_tasks WHERE project_id = ?').bind(project.id).first<{ total: number }>(),
+    ]);
+    const maxEquipment = equipmentRows.results.reduce((maximum, row) => {
+      const number = Number(String(row.item).slice(3));
+      return Number.isFinite(number) ? Math.max(maximum, number) : maximum;
+    }, 0);
+    const taskId = crypto.randomUUID();
+    const plannedDate = values[3];
+    const matrixArrivalDate = values[4];
+    const now = new Date().toISOString();
+    await db.prepare(
+      'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?)',
+    ).bind(
+      taskId,
+      project.id,
+      `manual:${taskId}`,
+      parent?.id ?? null,
+      'Equipamentos',
+      `EQ.${maxEquipment + 1}`,
+      fleet,
+      'Operação',
+      1,
+      plannedDate,
+      plannedDate,
+      matrixArrivalDate,
+      '',
+      matrixArrivalDate ? 'Em andamento' : 'Não iniciado',
+      values[2],
+      'task',
+      Number(order?.total ?? 0) + 1,
+    ).run();
+    await db.prepare('UPDATE project_tracking_projects SET updated_at = ? WHERE id = ?').bind(now, project.id).run();
+    await syncOprFleetsFromSchedules();
+    await db.prepare(`UPDATE project_opr_fleets SET
+      fleet_definition = ?, basic_kit = ?, maintenance_release = ?, configuration = ?, acquisition = ?,
+      adaptations = ?, fleet_documentation = ?, team_definition = ?, badge = ?, team_documentation = ?,
+      pgr_pcmso = ?, legal_documents = ?, client_inspection = ?, billing = ?, updated_at = ?
+      WHERE source_task_id = ?`)
+      .bind(...values.slice(5), now, taskId).run();
+    const record = await db.prepare(`SELECT ${selectColumns} FROM project_opr_fleets WHERE source_task_id = ?`).bind(taskId).first<Record<string, unknown>>();
     return Response.json({ record: rowToOpr(record!) }, { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível salvar a frota.' }, { status: 500 });
