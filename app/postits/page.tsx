@@ -329,6 +329,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [editingProject, setEditingProject] = useState<string | null>(null),
     [managingProjects, setManagingProjects] = useState(false),
     [deleteProjectPending, setDeleteProjectPending] = useState<string | null>(null),
+    [deleteSectorPending, setDeleteSectorPending] = useState<string | null>(null),
     [editorMode, setEditorMode] = useState(false),
     [authChecked, setAuthChecked] = useState(viewOnly),
     [loginOpen, setLoginOpen] = useState(false),
@@ -667,6 +668,25 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
       setDeleteProjectPending(null);
     } finally { setSaving(false); }
   }
+  async function deleteSector(sector: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/postit-catalog', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'sector', name: sector }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || 'Não foi possível excluir o setor.');
+      setSectors((all) => all.filter((item) => item !== sector));
+      setReportSector((current) => current === sector ? '__all' : current);
+      setCatalogType(null);
+      setEditingSector(null);
+      setCatalogName('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível excluir o setor.');
+    } finally {
+      setDeleteSectorPending(null);
+      setSaving(false);
+    }
+  }
   return (
     <>
       <PmoToolHeader title="Quadro de ações" subtitle="Acompanhamento semanal" backHref="/" />
@@ -1003,12 +1023,26 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               {catalogColor.toUpperCase()}
             </label>
           </div>}
+          {error && <p role="alert" className={styles.loginError}>{error}</p>}
           <div className={styles.dialogFooter}>
+            {editingSector && <Button variant="outline" className={styles.deleteProjectButton} disabled={saving} onClick={() => setDeleteSectorPending(editingSector)}><Trash2 /> Excluir setor</Button>}
             <Button variant="outline" onClick={() => setCatalogType(null)}>Cancelar</Button>
             <Button className={styles.newButton} disabled={saving} onClick={() => void saveCatalog()}>{editingSector ? 'Salvar setor' : editingProject ? 'Salvar projeto' : 'Adicionar'}</Button>
           </div>
         </DialogContent>
       </Dialog>}
+      {canEdit && <AlertDialog open={deleteSectorPending !== null} onOpenChange={(open) => !open && setDeleteSectorPending(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir setor?</AlertDialogTitle>
+            <AlertDialogDescription>O setor será removido do quadro. A exclusão só é permitida quando não houver post-its vinculados a ele.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className={styles.deleteProjectConfirm} disabled={saving} onClick={() => deleteSectorPending && void deleteSector(deleteSectorPending)}>Excluir setor</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>}
       {canEdit && <Dialog open={managingProjects} onOpenChange={setManagingProjects}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>

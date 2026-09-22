@@ -190,16 +190,16 @@ export async function DELETE(request: Request) {
     const denied = await requireEditor(request);
     if (denied) return denied;
     const body = (await request.json()) as { type?: string; name?: string };
-    const type = body.type === 'project' ? body.type : '';
+    const type = body.type === 'project' || body.type === 'sector' ? body.type : '';
     const name = body.name?.trim() ?? '';
-    if (!type || !name) throw new Error('Projeto não informado.');
+    if (!type || !name) throw new Error('Projeto ou setor não informado.');
     const db = getDb();
-    const linked = await db.prepare('SELECT COUNT(*) AS total FROM postit_actions WHERE project = ?').bind(name).first<{ total: number }>();
-    if (linked?.total) throw new Error(`Não é possível excluir: existem ${linked.total} post-it(s) vinculados a este projeto.`);
+    const linked = await db.prepare(`SELECT COUNT(*) AS total FROM postit_actions WHERE ${type === 'project' ? 'project' : 'sector'} = ?`).bind(name).first<{ total: number }>();
+    if (linked?.total) throw new Error(`Não é possível excluir: existem ${linked.total} post-it(s) vinculados a este ${type === 'project' ? 'projeto' : 'setor'}.`);
     const result = await db.prepare('DELETE FROM postit_board_catalog WHERE type = ? AND name = ?').bind(type, name).run();
-    if (!result.meta.changes) throw new Error('Projeto não encontrado.');
+    if (!result.meta.changes) throw new Error(`${type === 'project' ? 'Projeto' : 'Setor'} não encontrado.`);
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível excluir o projeto.' }, { status: 400 });
+    return Response.json({ error: error instanceof Error ? error.message : 'Não foi possível excluir o cadastro.' }, { status: 400 });
   }
 }
