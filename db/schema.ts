@@ -130,6 +130,12 @@ export const pmoProjects = sqliteTable(
   ],
 );
 
+export const pmoProjectScopes = sqliteTable('pmo_project_scopes', {
+  projectCode: text('project_code').primaryKey(),
+  dataJson: text('data_json').notNull().default('{}'),
+  updatedAt: text('updated_at').notNull().default('CURRENT_TIMESTAMP'),
+});
+
 export const projectOprFleets = sqliteTable(
   'project_opr_fleets',
   {

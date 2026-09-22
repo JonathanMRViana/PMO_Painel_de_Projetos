@@ -2,6 +2,7 @@
 import '@/lib/github-pages-api';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { BarChart3, ChevronDown, Pencil, Plus, Truck, X } from 'lucide-react';
 import { PmoToolHeader } from '@/components/pmo-tool-header';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ function statusClass(value: string) {
 }
 
 export function ExecutiveOprClient() {
+  const requestedProject = useSearchParams().get('projeto')?.trim() || '';
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<OprRecord[]>([]);
   const [selectedProject, setSelectedProject] = useState('');
@@ -80,7 +82,7 @@ export function ExecutiveOprClient() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void load(''); }, []);
+  useEffect(() => { if (requestedProject) setSelectedProject(requestedProject); else void load(''); }, [requestedProject]);
 
   useEffect(() => {
     if (selectedProject) void load(selectedProject);

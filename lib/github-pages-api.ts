@@ -30,7 +30,7 @@ if (typeof window !== 'undefined' && isGitHubPages() && !window.__pmoApiPatched)
     const link = (event.target as Element).closest<HTMLAnchorElement>('a[href^="/"]');
     if (!link || link.target === '_blank' || event.metaKey || event.ctrlKey) return;
     const [route, query = ''] = link.getAttribute('href')!.split('?');
-    if (!['/', '/postits', '/acompanhamento', '/projetos', '/visao-executiva', '/postits/visualizar'].includes(route)) return;
+    if (!['/', '/postits', '/acompanhamento', '/projetos', '/projetos/detalhe', '/visao-executiva', '/postits/visualizar'].includes(route)) return;
     event.preventDefault();
     const page = route === '/' ? '' : `${route}.html`;
     window.location.href = `/PMO_Painel_de_Projetos/${page}${query ? `?${query}` : ''}`;

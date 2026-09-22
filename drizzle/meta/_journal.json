@@ -99,6 +99,13 @@
       "when": 1790164800001,
       "tag": "0013_rich_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790164800002,
+      "tag": "0014_big_blacklash",
+      "breakpoints": true
     }
   ]
 }

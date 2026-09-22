@@ -66,6 +66,7 @@ type Task = {
 type Project = {
   id: string;
   name: string;
+  code: string;
   templateRevision: number;
   startDate: string;
   updatedAt: string;
@@ -958,6 +959,9 @@ export function TrackingClient() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              {view === 'projects' && selectedProject?.code && (
+                <a href={`/projetos/detalhe?codigo=${encodeURIComponent(selectedProject.code)}`} className="inline-flex h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-[#103f85] hover:bg-slate-50">Premissas do projeto</a>
+              )}
               {view === 'projects' && selectedProject && isEditor && (
                 <div className="flex rounded-lg border border-slate-200 p-1">
                   <button
