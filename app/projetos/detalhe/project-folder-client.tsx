@@ -162,7 +162,11 @@ export function ProjectFolderClient() {
         <a className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-[#103f85]" href={`/acompanhamento?projeto=${encodeURIComponent(project.name)}`}><CalendarDays size={16} /> Cronograma</a>
         <a className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-[#103f85]" href={`/postits/visualizar?projeto=${encodeURIComponent(project.name)}`}><ClipboardList size={16} /> Ações</a>
         {editor && <Button onClick={() => void save()} disabled={!dirty || saving}><Save size={16} /> {saving ? 'Salvando...' : 'Salvar premissas'}</Button>}
-        {!editor && <Button variant="outline" onClick={() => setAuthOpen(true)}>Acessar edição</Button>}
+        {!editor && <Button variant="outline" onClick={() => {
+          if (window.location.hostname === 'jonathanmrviana.github.io') {
+            window.location.href = `https://pmo-makro-cockpit.finfred-6125.chatgpt.site/projetos/detalhe?codigo=${encodeURIComponent(project.code)}`;
+          } else setAuthOpen(true);
+        }}>Acessar edição</Button>}
       </div>
     </div>
     {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
