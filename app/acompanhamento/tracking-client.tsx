@@ -575,7 +575,6 @@ export function TrackingClient() {
         }),
       );
       await loadProject(selectedProject.id);
-      setNotice('Alterações salvas automaticamente.');
     } catch (reason) {
       setError(
         reason instanceof Error
