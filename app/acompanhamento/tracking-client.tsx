@@ -585,6 +585,28 @@ export function TrackingClient() {
     }
   }
 
+  async function deleteProjectEquipment(task: Task) {
+    if (!selectedProject || !window.confirm(`Excluir o equipamento “${task.title}”? A frota vinculada também será removida da OPR.`)) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await json(
+        await fetch('/api/project-tracking/projects', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: selectedProject.id, taskId: task.id }),
+        }),
+      );
+      await loadProject(selectedProject.id);
+      setNotice('Equipamento removido do cronograma e da OPR.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível excluir o equipamento.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openCreateLinkedAction(task: Task) {
     setLinkedActionDraft({
       task,
@@ -1044,6 +1066,7 @@ export function TrackingClient() {
               onChange={patchProjectTask}
               onSave={saveProjectTask}
               onCreateAction={openCreateLinkedAction}
+              onDeleteEquipment={deleteProjectEquipment}
             />
           )}
         </section>
@@ -1757,6 +1780,7 @@ function ProjectScheduleTable({
   onChange,
   onSave,
   onCreateAction,
+  onDeleteEquipment,
 }: {
   tasks: Task[];
   actions: BoardAction[];
@@ -1766,6 +1790,7 @@ function ProjectScheduleTable({
   onChange: (id: string, changes: Partial<Task>) => void;
   onSave: (task: Task) => void;
   onCreateAction: (task: Task) => void;
+  onDeleteEquipment: (task: Task) => void;
 }) {
   const map = new Map(tasks.map((task) => [task.id, task]));
   const choices = tasks.filter((task) => task.kind !== 'group');
@@ -1853,7 +1878,7 @@ function ProjectScheduleTable({
                           {task.item}
                         </td>
                         <td className="px-3 py-2.5 text-xs">
-                          <TaskName task={task} map={map} />
+                          <div className="flex items-start justify-between gap-2"><TaskName task={task} map={map} />{editable && task.pillar === 'Equipamentos' && /^EQ\./.test(task.item) && <button type="button" onClick={() => onDeleteEquipment(task)} className="shrink-0 text-[11px] font-bold text-red-600 hover:underline">Excluir</button>}</div>
                         </td>
                         <td className="px-3 py-2.5">
                           {summary ? (

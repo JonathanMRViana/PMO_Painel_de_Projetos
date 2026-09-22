@@ -134,6 +134,7 @@ export const projectOprFleets = sqliteTable(
   {
     id: text('id').primaryKey(),
     projectCode: text('project_code').notNull(),
+    sourceTaskId: text('source_task_id'),
     client: text('client').notNull().default(''),
     fleet: text('fleet').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -158,6 +159,7 @@ export const projectOprFleets = sqliteTable(
   },
   (table) => [
     index('idx_project_opr_fleets_project').on(table.projectCode),
+    uniqueIndex('idx_project_opr_fleets_source_task').on(table.sourceTaskId),
   ],
 );
 

@@ -1,5 +1,6 @@
 import { getDb } from '@/db';
 import { requireEditor } from '@/lib/editor-auth';
+import { syncOprFleetsFromSchedules } from '@/lib/opr-fleet-sync';
 
 const fields = [
   'client', 'fleet', 'description', 'plannedDate', 'matrixArrivalDate',
@@ -14,7 +15,7 @@ type OprBody = Partial<Record<(typeof fields)[number], unknown>> & {
   projectCode?: unknown;
 };
 
-const selectColumns = `id, project_code, client, fleet, description, planned_date,
+const selectColumns = `id, project_code, source_task_id, client, fleet, description, planned_date,
   matrix_arrival_date, fleet_definition, basic_kit, maintenance_release,
   configuration, acquisition, adaptations, fleet_documentation, team_definition,
   badge, team_documentation, pgr_pcmso, legal_documents, client_inspection,
@@ -27,6 +28,7 @@ function clean(value: unknown) {
 function rowToOpr(row: Record<string, unknown>) {
   return {
     id: String(row.id), projectCode: String(row.project_code), client: String(row.client || ''),
+    sourceTaskId: row.source_task_id ? String(row.source_task_id) : null,
     fleet: String(row.fleet || ''), description: String(row.description || ''),
     plannedDate: String(row.planned_date || ''), matrixArrivalDate: String(row.matrix_arrival_date || ''),
     fleetDefinition: String(row.fleet_definition || ''), basicKit: String(row.basic_kit || ''),
@@ -42,6 +44,7 @@ function rowToOpr(row: Record<string, unknown>) {
 
 export async function GET(request: Request) {
   try {
+    await syncOprFleetsFromSchedules();
     const projectCode = new URL(request.url).searchParams.get('projeto')?.trim() || '';
     const db = getDb();
     const query = projectCode
@@ -89,8 +92,17 @@ export async function PUT(request: Request) {
     const projectCode = clean(body.projectCode);
     const fleet = clean(body.fleet);
     if (!id || !projectCode || !fleet) return Response.json({ error: 'Informe projeto e frota.' }, { status: 400 });
+    const db = getDb();
+    const existing = await db.prepare('SELECT source_task_id FROM project_opr_fleets WHERE id = ?').bind(id).first<{ source_task_id: string | null }>();
+    if (!existing) return Response.json({ error: 'Registro não encontrado.' }, { status: 404 });
     const values = fields.map((field) => clean(body[field]));
-    const result = await getDb().prepare(`UPDATE project_opr_fleets SET
+    const result = existing.source_task_id
+      ? await db.prepare(`UPDATE project_opr_fleets SET
+          fleet_definition = ?, basic_kit = ?, maintenance_release = ?, configuration = ?, acquisition = ?,
+          adaptations = ?, fleet_documentation = ?, team_definition = ?, badge = ?, team_documentation = ?,
+          pgr_pcmso = ?, legal_documents = ?, client_inspection = ?, billing = ?, updated_at = ? WHERE id = ?`)
+        .bind(...values.slice(5), new Date().toISOString(), id).run()
+      : await db.prepare(`UPDATE project_opr_fleets SET
       project_code = ?, client = ?, fleet = ?, description = ?, planned_date = ?, matrix_arrival_date = ?,
       fleet_definition = ?, basic_kit = ?, maintenance_release = ?, configuration = ?, acquisition = ?,
       adaptations = ?, fleet_documentation = ?, team_definition = ?, badge = ?, team_documentation = ?,
@@ -110,7 +122,11 @@ export async function DELETE(request: Request) {
     if (denied) return denied;
     const id = clean((await request.json() as OprBody).id);
     if (!id) return Response.json({ error: 'Registro não informado.' }, { status: 400 });
-    await getDb().prepare('DELETE FROM project_opr_fleets WHERE id = ?').bind(id).run();
+    const db = getDb();
+    const existing = await db.prepare('SELECT source_task_id FROM project_opr_fleets WHERE id = ?').bind(id).first<{ source_task_id: string | null }>();
+    if (existing?.source_task_id)
+      return Response.json({ error: 'Esta frota é controlada pelo cronograma. Exclua o equipamento no projeto.' }, { status: 400 });
+    await db.prepare('DELETE FROM project_opr_fleets WHERE id = ?').bind(id).run();
     return Response.json({ deletedId: id });
   } catch {
     return Response.json({ error: 'Não foi possível excluir a frota.' }, { status: 500 });

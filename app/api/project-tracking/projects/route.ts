@@ -7,6 +7,7 @@ import {
 } from '@/lib/project-tracking-db';
 import { ensureProjectInBoard } from '@/lib/project-hub';
 import { syncScheduleActions } from '@/lib/schedule-action-sync';
+import { syncOprFleetsFromSchedules } from '@/lib/opr-fleet-sync';
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -190,6 +191,7 @@ export async function POST(request: Request) {
           Number(order?.total ?? 0) + 1,
         )
         .run();
+      await syncOprFleetsFromSchedules();
       return Response.json({ id: taskId }, { status: 201 });
     }
     const name = body.name?.trim().replace(/\s+/g, ' ') ?? '';
@@ -439,6 +441,7 @@ export async function PUT(request: Request) {
       .bind(projectId)
       .first<{ name: string; project_code: string }>();
     if (project) await syncScheduleActions(projectId, project.name, project.project_code);
+    await syncOprFleetsFromSchedules();
     return Response.json({ updatedAt });
   } catch (error) {
     return trackingError(error, 'Não foi possível atualizar o cronograma.');
@@ -451,9 +454,11 @@ export async function DELETE(request: Request) {
     if (denied) return denied;
     const body = (await request.json()) as {
       projectId?: string;
+      taskId?: string;
       confirmationName?: string;
     };
     const projectId = body.projectId?.trim() ?? '';
+    const taskId = body.taskId?.trim() ?? '';
     const confirmationName = body.confirmationName?.trim() ?? '';
     if (!projectId)
       return Response.json(
@@ -471,6 +476,18 @@ export async function DELETE(request: Request) {
         { error: 'Projeto não encontrado.' },
         { status: 404 },
       );
+    if (taskId) {
+      const task = await db.prepare(
+        "SELECT id FROM project_tracking_project_tasks WHERE id = ? AND project_id = ? AND pillar = 'Equipamentos' AND kind = 'task' AND item GLOB 'EQ.*'",
+      ).bind(taskId, projectId).first();
+      if (!task) return Response.json({ error: 'Somente equipamentos adicionados ao projeto podem ser excluídos aqui.' }, { status: 400 });
+      await db.batch([
+        db.prepare('DELETE FROM project_tracking_project_tasks WHERE id = ? AND project_id = ?').bind(taskId, projectId),
+        db.prepare('UPDATE project_tracking_projects SET updated_at = ? WHERE id = ?').bind(new Date().toISOString(), projectId),
+      ]);
+      await syncOprFleetsFromSchedules();
+      return Response.json({ deletedTaskId: taskId });
+    }
     if (confirmationName !== project.name)
       return Response.json(
         { error: 'Digite o nome exato do projeto para confirmar a exclusão.' },
@@ -487,6 +504,7 @@ export async function DELETE(request: Request) {
         .prepare('DELETE FROM project_tracking_projects WHERE id = ?')
         .bind(projectId),
     ]);
+    await syncOprFleetsFromSchedules();
 
     const projectsResult = await db
       .prepare(
