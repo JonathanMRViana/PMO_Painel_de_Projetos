@@ -87,7 +87,7 @@ const defaultProjects: Project[] = [
   'Geral',
 ];
 const criticalities: Criticality[] = ['Baixo', 'Médio', 'Alto', 'Crítico'];
-const statuses: Status[] = ['No prazo', 'Atenção', 'Crítico', 'Concluído'];
+const criticalitySummary: Criticality[] = ['Crítico', 'Alto', 'Médio', 'Baixo'];
 const projectTextColor = (color?: string) => {
   const hex = color?.replace('#', '');
   if (!hex || !/^[0-9a-f]{6}$/i.test(hex)) return '#263036';
@@ -427,11 +427,15 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
   );
   const counters = useMemo(
     () =>
-      statuses.map((status) => ({
-        status,
-        total: actions.filter((a) => state(a) === status).length,
+      criticalitySummary.map((criticality) => ({
+        criticality,
+        total: actions.filter((a) =>
+          !a.completed &&
+          a.criticality === criticality &&
+          (!selectedProject || projectIdentity(a.project) === projectIdentity(selectedProject)),
+        ).length,
       })),
-    [actions],
+    [actions, selectedProject],
   );
   const projectActionCounts = useMemo(
     () => Object.fromEntries(projects.map((project) => [
@@ -852,19 +856,20 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
         </div>
         <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
-            <CircleAlert size={16} /> Status por prazo
+            <CircleAlert size={16} /> Criticidade das ações
           </div>
           <div className={styles.statusCounts}>
             {counters.map((x) => (
               <span
-                key={x.status}
-                className={styles['status' + x.status.replace(' ', '')]}
+                key={x.criticality}
+                className={styles.criticalityCount}
+                data-level={x.criticality}
               >
-                <i /> {x.total} {x.status}
+                <i /> {x.total} {x.criticality}
               </span>
             ))}
           </div>
-          <p>O status é atualizado pela data prevista.</p>
+          <p>Ações em aberto{selectedProject ? ` de ${selectedProject}` : ''}.</p>
         </div>
         <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
