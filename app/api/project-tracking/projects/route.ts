@@ -73,7 +73,7 @@ export async function GET(request: Request) {
       );
     const tasks = await db
       .prepare(
-        'SELECT id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order FROM project_tracking_project_tasks WHERE project_id = ? ORDER BY sort_order, item',
+        'SELECT id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order FROM project_tracking_project_tasks WHERE project_id = ? ORDER BY sort_order, item',
       )
       .bind(projectId)
       .all();
@@ -114,6 +114,7 @@ export async function POST(request: Request) {
       item?: string;
       title?: string;
       owner?: string;
+      criticality?: string;
       durationDays?: number;
       kind?: string;
       startDate?: string;
@@ -171,7 +172,7 @@ export async function POST(request: Request) {
         .first<{ total: number }>();
       await db
         .prepare(
-          'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?)',
+          'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?)',
         )
         .bind(
           taskId,
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
           item,
           title,
           String(body.owner ?? '').trim(),
+          ['Baixo', 'Médio', 'Alto', 'Crítico'].includes(String(body.criticality)) ? body.criticality : 'Médio',
           durationDays,
           body.predecessorId?.trim() || null,
           startDate,
@@ -234,7 +236,7 @@ export async function POST(request: Request) {
       ...template.tasks.map((task) => {
         return db
           .prepare(
-            'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
+            'INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
           )
           .bind(
             `${projectId}:${task.id}`,
@@ -245,6 +247,7 @@ export async function POST(request: Request) {
             task.item,
             task.title,
             task.owner,
+            task.criticality,
             task.durationDays,
             task.predecessorId ? `${projectId}:${task.predecessorId}` : null,
             '',
@@ -280,7 +283,7 @@ export async function POST(request: Request) {
     await updateProjectStatus(hubProject.name, normalizeProjectStatus(String(body.status ?? '')));
     if (contractStartDate) await updateContractStartDate(hubProject.code, contractStartDate);
     await db.prepare('UPDATE project_tracking_projects SET project_code = ? WHERE id = ?').bind(hubProject.code, projectId).run();
-    if (startDate) await syncScheduleActions(projectId, name, hubProject.code);
+    if (startDate) await syncScheduleActions();
     return Response.json(
       {
         project: {
@@ -317,6 +320,7 @@ export async function PUT(request: Request) {
       actualEndDate?: string;
       linkedActionId?: string | null;
       progress?: number;
+      criticality?: string;
       status?: string;
       observation?: string;
     };
@@ -354,10 +358,10 @@ export async function PUT(request: Request) {
     const taskId = body.taskId.trim();
     const current = await db
       .prepare(
-        'SELECT kind FROM project_tracking_project_tasks WHERE id = ? AND project_id = ?',
+        'SELECT kind, status, criticality FROM project_tracking_project_tasks WHERE id = ? AND project_id = ?',
       )
       .bind(taskId, projectId)
-      .first<{ kind: string }>();
+      .first<{ kind: string; status: string; criticality: string }>();
     if (!current)
       return Response.json(
         { error: 'Atividade não encontrada.' },
@@ -404,20 +408,21 @@ export async function PUT(request: Request) {
     );
     if (actualEndDate) progress = 100;
     else if (actualStartDate && progress === 0) progress = 1;
-    const status = automaticStatus(
-      startDate,
-      endDate,
-      actualStartDate,
-      actualEndDate,
-    );
+    const status = (body.status ?? current.status) === 'N/A'
+      ? 'N/A'
+      : automaticStatus(startDate, endDate, actualStartDate, actualEndDate);
+    const criticality = String(body.criticality ?? current.criticality);
+    if (!['Baixo', 'Médio', 'Alto', 'Crítico'].includes(criticality))
+      return Response.json({ error: 'Criticidade inválida.' }, { status: 400 });
 
     await db.batch([
       db
         .prepare(
-          'UPDATE project_tracking_project_tasks SET owner = ?, duration_days = ?, predecessor_id = ?, start_date = ?, end_date = ?, actual_start_date = ?, actual_end_date = ?, linked_action_id = ?, progress = ?, status = ?, observation = ? WHERE id = ? AND project_id = ?',
+          'UPDATE project_tracking_project_tasks SET owner = ?, criticality = ?, duration_days = ?, predecessor_id = ?, start_date = ?, end_date = ?, actual_start_date = ?, actual_end_date = ?, linked_action_id = ?, progress = ?, status = ?, observation = ? WHERE id = ? AND project_id = ?',
         )
         .bind(
           String(body.owner ?? '').trim(),
+          criticality,
           durationDays,
           predecessorId,
           startDate,
@@ -448,7 +453,7 @@ export async function PUT(request: Request) {
       .prepare('SELECT name, project_code FROM project_tracking_projects WHERE id = ?')
       .bind(projectId)
       .first<{ name: string; project_code: string }>();
-    if (project) await syncScheduleActions(projectId, project.name, project.project_code);
+    if (project) await syncScheduleActions();
     await syncOprFleetsFromSchedules();
     return Response.json({ updatedAt });
   } catch (error) {

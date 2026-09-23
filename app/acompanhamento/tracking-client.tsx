@@ -44,6 +44,8 @@ import {
 
 type Pillar = 'Empresa' | 'Pessoas' | 'Equipamentos';
 type TaskKind = 'group' | 'task' | 'milestone';
+type Criticality = 'Baixo' | 'Médio' | 'Alto' | 'Crítico';
+const criticalities: Criticality[] = ['Baixo', 'Médio', 'Alto', 'Crítico'];
 type Task = {
   id: string;
   parentId: string | null;
@@ -51,6 +53,7 @@ type Task = {
   item: string;
   title: string;
   owner: string;
+  criticality: Criticality;
   durationDays: number;
   predecessorId: string | null;
   startDate: string;
@@ -95,6 +98,7 @@ type TaskDraft = Pick<
   | 'item'
   | 'title'
   | 'owner'
+  | 'criticality'
   | 'durationDays'
   | 'kind'
   | 'startDate'
@@ -117,6 +121,7 @@ const emptyDraft: TaskDraft = {
   item: '',
   title: '',
   owner: '',
+  criticality: 'Médio',
   durationDays: 1,
   kind: 'task',
   startDate: '',
@@ -156,6 +161,15 @@ function automaticTaskStatus(task: Pick<Task, 'startDate' | 'endDate' | 'actualS
   return task.endDate && task.endDate < today ? 'Atrasado' : 'Não iniciado';
 }
 
+function hiddenByCollapsedGroup(task: Task, map: Map<string, Task>, collapsedGroups: Set<string>) {
+  let parentId = task.parentId;
+  while (parentId) {
+    if (collapsedGroups.has(parentId)) return true;
+    parentId = map.get(parentId)?.parentId ?? null;
+  }
+  return false;
+}
+
 function boardDay(date: string) {
   if (!date) return 'd7';
   const due = new Date(`${date}T12:00:00`);
@@ -186,7 +200,8 @@ function withGroupSummaries(tasks: Task[]) {
     );
   return tasks.map((task) => {
     if (task.kind !== 'group') return task;
-    const leaves = descendants(task.id);
+    const leaves = descendants(task.id).filter((child) => child.status !== 'N/A');
+    const allNotApplicable = descendants(task.id).length > 0 && leaves.length === 0;
     const starts = leaves
       .map((child) => child.startDate)
       .filter(Boolean)
@@ -216,7 +231,7 @@ function withGroupSummaries(tasks: Task[]) {
       actualStartDate: actualStarts[0] ?? '',
       actualEndDate: actualEnds.at(-1) ?? '',
       progress,
-      status: automaticTaskStatus({
+      status: allNotApplicable ? 'N/A' : automaticTaskStatus({
         startDate: starts[0] ?? '',
         endDate: ends.at(-1) ?? '',
         actualStartDate: actualStarts[0] ?? '',
@@ -235,6 +250,7 @@ export function TrackingClient() {
   const [collapsedPillars, setCollapsedPillars] = useState<Set<Pillar>>(
     new Set(),
   );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [templateTasks, setTemplateTasks] = useState<Task[]>([]);
   const [revision, setRevision] = useState(1);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -368,7 +384,7 @@ export function TrackingClient() {
         (Object.keys(pillarMeta) as Pillar[]).map((pillar) => [
           pillar,
           visibleTasks.filter(
-            (task) => task.pillar === pillar && task.kind !== 'group',
+            (task) => task.pillar === pillar && task.kind !== 'group' && task.status !== 'N/A',
           ).length,
         ]),
       ) as Record<Pillar, number>,
@@ -379,16 +395,16 @@ export function TrackingClient() {
     return Object.fromEntries(
       (Object.keys(pillarMeta) as Pillar[]).map((pillar) => {
         const leaves = visibleTasks.filter(
-          (task) => task.pillar === pillar && task.kind === 'task' && !parentIds.has(task.id),
+          (task) => task.pillar === pillar && task.kind === 'task' && task.status !== 'N/A' && !parentIds.has(task.id),
         );
         return [
           pillar,
           leaves.length
             ? Math.round(leaves.reduce((total, task) => total + task.progress, 0) / leaves.length)
-            : 0,
+            : null,
         ];
       }),
-    ) as Record<Pillar, number>;
+    ) as Record<Pillar, number | null>;
   }, [visibleTasks]);
 
   function openNewTask(parent?: Task) {
@@ -458,6 +474,15 @@ export function TrackingClient() {
       const next = new Set(current);
       if (next.has(pillar)) next.delete(pillar);
       else next.add(pillar);
+      return next;
+    });
+  }
+
+  function toggleGroup(id: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -724,8 +749,11 @@ export function TrackingClient() {
       item: task.item,
       title: task.title,
       owner: task.owner,
+      criticality: task.criticality,
       durationDays: task.durationDays,
       kind: task.kind,
+      startDate: task.startDate,
+      endDate: task.endDate,
     });
     setTaskDialogOpen(true);
   }
@@ -963,7 +991,7 @@ export function TrackingClient() {
                   <h2 className="text-xl font-bold">{pillar}</h2>
                   {view === 'projects' && (
                     <span className="text-sm font-bold text-slate-700">
-                      {progressByPillar[pillar]}%
+                      {progressByPillar[pillar] === null ? 'N/A' : `${progressByPillar[pillar]}%`}
                     </span>
                   )}
                 </div>
@@ -1111,7 +1139,9 @@ export function TrackingClient() {
               tasks={templateTasks}
               editable={isEditor}
               collapsedPillars={collapsedPillars}
+              collapsedGroups={collapsedGroups}
               onTogglePillar={togglePillar}
+              onToggleGroup={toggleGroup}
               onAdd={openNewTask}
               onEdit={openEditTask}
               onDelete={setDeleteTask}
@@ -1120,7 +1150,9 @@ export function TrackingClient() {
             <GanttView
               tasks={displayProjectTasks}
               collapsedPillars={collapsedPillars}
+              collapsedGroups={collapsedGroups}
               onTogglePillar={togglePillar}
+              onToggleGroup={toggleGroup}
             />
           ) : (
             <ProjectScheduleTable
@@ -1128,7 +1160,9 @@ export function TrackingClient() {
               actions={projectActions}
               editable={isEditor}
               collapsedPillars={collapsedPillars}
+              collapsedGroups={collapsedGroups}
               onTogglePillar={togglePillar}
+              onToggleGroup={toggleGroup}
               onChange={patchProjectTask}
               onSave={saveProjectTask}
               onCreateAction={openCreateLinkedAction}
@@ -1337,6 +1371,12 @@ export function TrackingClient() {
                 }
               />
             </label>
+            {taskDraft.kind !== 'group' && <label className="grid gap-2 text-sm font-semibold">
+              Criticidade {taskTarget === 'template' ? 'padrão' : ''}
+              <select value={taskDraft.criticality} onChange={(event) => setTaskDraft((draft) => ({ ...draft, criticality: event.target.value as Criticality }))} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm">
+                {criticalities.map((criticality) => <option key={criticality} value={criticality}>{criticality}</option>)}
+              </select>
+            </label>}
             {taskTarget === 'project' && taskDraft.kind !== 'group' && (
               <>
                 <label className="grid gap-2 text-sm font-semibold">
@@ -1696,14 +1736,18 @@ function PillarRow({
   );
 }
 
-function TaskName({ task, map }: { task: Task; map: Map<string, Task> }) {
+function TaskName({ task, map, collapsed, onToggle }: { task: Task; map: Map<string, Task>; collapsed?: boolean; onToggle?: () => void }) {
   const depth = taskDepth(task, map);
   return (
     <div
       className="flex items-center gap-2"
       style={{ paddingLeft: `${depth * 18}px` }}
     >
-      {depth > 0 && (
+      {task.kind === 'group' && onToggle ? (
+        <button type="button" onClick={onToggle} aria-expanded={!collapsed} aria-label={`${collapsed ? 'Expandir' : 'Recolher'} ${task.title}`} className="shrink-0 rounded p-0.5 text-[#103f85] hover:bg-slate-200 focus-visible:outline focus-visible:outline-2">
+          {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        </button>
+      ) : depth > 0 && (
         <ChevronRight size={14} className="shrink-0 text-slate-300" />
       )}
       {task.kind === 'milestone' && (
@@ -1726,7 +1770,9 @@ function TemplateTable({
   tasks,
   editable,
   collapsedPillars,
+  collapsedGroups,
   onTogglePillar,
+  onToggleGroup,
   onAdd,
   onEdit,
   onDelete,
@@ -1734,7 +1780,9 @@ function TemplateTable({
   tasks: Task[];
   editable: boolean;
   collapsedPillars: Set<Pillar>;
+  collapsedGroups: Set<string>;
   onTogglePillar: (pillar: Pillar) => void;
+  onToggleGroup: (id: string) => void;
   onAdd: (parent?: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -1742,15 +1790,24 @@ function TemplateTable({
   const map = new Map(tasks.map((task) => [task.id, task]));
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[940px] text-left">
-        <thead className="bg-slate-50 text-sm text-slate-500">
+      <table className="w-full min-w-[1560px] table-fixed text-left">
+        <thead className="bg-slate-50 text-xs text-slate-500">
           <tr>
-            <th className="w-28 px-4 py-3">Item</th>
-            <th className="px-4 py-3">Atividade</th>
-            <th className="w-52 px-4 py-3">Responsável</th>
-            <th className="w-32 px-4 py-3">Predecessora</th>
-            <th className="w-20 px-4 py-3 text-center">Dias</th>
-            {editable && <th className="w-32 px-4 py-3 text-right">Ações</th>}
+            <th className="w-[54px] px-2 py-3">Item</th>
+            <th className="w-[218px] px-2 py-3">Atividade</th>
+            <th className="w-[104px] px-2 py-3">Responsável</th>
+            <th className="w-[84px] px-2 py-3">Predecessora</th>
+            <th className="w-[102px] px-2 py-3">Início previsto</th>
+            <th className="w-[102px] px-2 py-3">Término previsto</th>
+            <th className="w-[102px] px-2 py-3">Início real</th>
+            <th className="w-[102px] px-2 py-3">Término real</th>
+            <th className="w-[50px] px-2 py-3">Dias</th>
+            <th className="w-[74px] px-2 py-3">Progresso</th>
+            <th className="w-[94px] px-2 py-3">Status</th>
+            <th className="w-[96px] px-2 py-3">Criticidade</th>
+            <th className="w-[146px] px-2 py-3">Ação vinculada</th>
+            <th className="w-[150px] px-2 py-3">Observação</th>
+            {editable && <th className="w-[104px] px-2 py-3 text-right">Ações</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -1764,11 +1821,11 @@ function TemplateTable({
                 <PillarRow
                   key={`${pillar}-header`}
                   pillar={pillar}
-                  colSpan={editable ? 6 : 5}
+                  colSpan={editable ? 15 : 14}
                   collapsed={collapsedPillars.has(pillar)}
                   onToggle={() => onTogglePillar(pillar)}
                 />,
-                ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
+                ...(collapsedPillars.has(pillar) ? [] : pillarTasks.filter((task) => !hiddenByCollapsedGroup(task, map, collapsedGroups))).map(
                   (task) => (
                     <tr
                       key={task.id}
@@ -1782,7 +1839,7 @@ function TemplateTable({
                         {task.item}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <TaskName task={task} map={map} />
+                        <TaskName task={task} map={map} collapsed={collapsedGroups.has(task.id)} onToggle={task.kind === 'group' ? () => onToggleGroup(task.id) : undefined} />
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
                         {task.owner || '—'}
@@ -1792,9 +1849,15 @@ function TemplateTable({
                           ? map.get(task.predecessorId)?.item
                           : '—'}
                       </td>
+                      {[0, 1, 2, 3].map((index) => <td key={index} className="px-2 py-3 text-xs text-slate-400">—</td>)}
                       <td className="px-4 py-3 text-center text-sm font-semibold text-slate-600">
                         {task.kind === 'group' ? '—' : task.durationDays}
                       </td>
+                      <td className="px-2 py-3 text-xs text-slate-400">—</td>
+                      <td className="px-2 py-3 text-xs text-slate-400">—</td>
+                      <td className="px-2 py-3 text-xs text-slate-600">{task.kind === 'group' ? '—' : task.criticality}</td>
+                      <td className="px-2 py-3 text-xs text-slate-400">—</td>
+                      <td className="px-2 py-3 text-xs text-slate-400">—</td>
                       {editable && (
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">
@@ -1842,7 +1905,9 @@ function ProjectScheduleTable({
   actions,
   editable,
   collapsedPillars,
+  collapsedGroups,
   onTogglePillar,
+  onToggleGroup,
   onChange,
   onSave,
   onCreateAction,
@@ -1852,7 +1917,9 @@ function ProjectScheduleTable({
   actions: BoardAction[];
   editable: boolean;
   collapsedPillars: Set<Pillar>;
+  collapsedGroups: Set<string>;
   onTogglePillar: (pillar: Pillar) => void;
+  onToggleGroup: (id: string) => void;
   onChange: (id: string, changes: Partial<Task>) => void;
   onSave: (task: Task) => void;
   onCreateAction: (task: Task) => void;
@@ -1867,6 +1934,7 @@ function ProjectScheduleTable({
         (task) =>
           task.pillar === pillar &&
           task.kind !== 'group' &&
+          task.status !== 'N/A' &&
           task.startDate &&
           task.endDate,
       )
@@ -1884,7 +1952,7 @@ function ProjectScheduleTable({
     'h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#103f85] disabled:border-transparent disabled:bg-transparent disabled:px-0';
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1560px] table-fixed text-left">
+      <table className="w-full min-w-[1660px] table-fixed text-left">
         <thead className="bg-slate-50 text-xs text-slate-500">
           <tr>
             <th className="w-[54px] px-2 py-3">Item</th>
@@ -1898,6 +1966,7 @@ function ProjectScheduleTable({
             <th className="w-[50px] px-2 py-3">Dias</th>
             <th className="w-[74px] px-2 py-3">Progresso</th>
             <th className="w-[94px] px-2 py-3">Status</th>
+            <th className="w-[96px] px-2 py-3">Criticidade</th>
             <th className="w-[146px] px-2 py-3">Ação vinculada</th>
             <th className="w-[150px] px-2 py-3">Observação</th>
           </tr>
@@ -1906,6 +1975,7 @@ function ProjectScheduleTable({
           className="divide-y divide-slate-100"
           onBlur={(event) => {
             if (!editable) return;
+            if ((event.target as HTMLElement).hasAttribute('data-immediate')) return;
             const row = (event.target as HTMLElement).closest<HTMLTableRowElement>(
               'tr[data-task-id]',
             );
@@ -1925,12 +1995,12 @@ function ProjectScheduleTable({
                 <PillarRow
                   key={`${pillar}-project-header`}
                   pillar={pillar}
-                  colSpan={13}
+                  colSpan={14}
                   collapsed={collapsedPillars.has(pillar)}
                   onToggle={() => onTogglePillar(pillar)}
                   plannedRange={plannedRange(pillar)}
                 />,
-                ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
+                ...(collapsedPillars.has(pillar) ? [] : pillarTasks.filter((task) => !hiddenByCollapsedGroup(task, map, collapsedGroups))).map(
                   (task) => {
                     const summary = task.kind === 'group';
                     return (
@@ -1945,7 +2015,7 @@ function ProjectScheduleTable({
                           {task.item}
                         </td>
                         <td className="px-3 py-2.5 text-xs">
-                          <div className="flex items-start justify-between gap-2"><TaskName task={task} map={map} />{editable && task.pillar === 'Equipamentos' && /^EQ\./.test(task.item) && <button type="button" onClick={() => onDeleteEquipment(task)} className="shrink-0 text-[11px] font-bold text-red-600 hover:underline">Excluir</button>}</div>
+                          <div className="flex items-start justify-between gap-2"><TaskName task={task} map={map} collapsed={collapsedGroups.has(task.id)} onToggle={task.kind === 'group' ? () => onToggleGroup(task.id) : undefined} />{editable && task.pillar === 'Equipamentos' && /^EQ\./.test(task.item) && <button type="button" onClick={() => onDeleteEquipment(task)} className="shrink-0 text-[11px] font-bold text-red-600 hover:underline">Excluir</button>}</div>
                         </td>
                         <td className="px-3 py-2.5">
                           {summary ? (
@@ -2081,7 +2151,7 @@ function ProjectScheduleTable({
                         <td className="px-3 py-2.5">
                           {summary ? (
                             <span className="text-xs font-bold">
-                              {task.progress}%
+                              {task.status === 'N/A' ? '—' : `${task.progress}%`}
                             </span>
                           ) : (
                             <div className="flex items-center gap-1">
@@ -2090,7 +2160,7 @@ function ProjectScheduleTable({
                                 min={0}
                                 max={100}
                                 value={task.progress}
-                                disabled={!editable}
+                                disabled={!editable || task.status === 'N/A'}
                                 onChange={(e) =>
                                   onChange(task.id, {
                                     progress: Number(e.target.value),
@@ -2107,11 +2177,43 @@ function ProjectScheduleTable({
                             <span className="text-xs font-semibold">
                               {task.status}
                             </span>
+                          ) : editable ? (
+                            <select
+                              data-immediate
+                              value={task.status === 'N/A' ? 'N/A' : 'automatic'}
+                              onChange={(event) => {
+                                const status = event.target.value === 'N/A' ? 'N/A' : automaticTaskStatus(task);
+                                onChange(task.id, { status });
+                                onSave({ ...task, status });
+                              }}
+                              aria-label={`Status de ${task.title}`}
+                              className={`${fieldClass} w-full`}
+                            >
+                              <option value="automatic">{automaticTaskStatus(task)}</option>
+                              <option value="N/A">N/A</option>
+                            </select>
                           ) : (
                             <span className="text-xs font-semibold text-slate-700">
-                              {automaticTaskStatus(task)}
+                              {task.status === 'N/A' ? 'N/A' : automaticTaskStatus(task)}
                             </span>
                           )}
+                        </td>
+                        <td className="px-2 py-2.5">
+                          {summary ? '—' : editable ? (
+                            <select
+                              data-immediate
+                              value={task.criticality}
+                              onChange={(event) => {
+                                const criticality = event.target.value as Criticality;
+                                onChange(task.id, { criticality });
+                                onSave({ ...task, criticality });
+                              }}
+                              aria-label={`Criticidade de ${task.title}`}
+                              className={`${fieldClass} w-full`}
+                            >
+                              {criticalities.map((criticality) => <option key={criticality} value={criticality}>{criticality}</option>)}
+                            </select>
+                          ) : <span className="text-xs">{task.criticality}</span>}
                         </td>
                         <td className="px-3 py-2.5">
                           {summary ? (
@@ -2181,11 +2283,15 @@ function ProjectScheduleTable({
 function GanttView({
   tasks,
   collapsedPillars,
+  collapsedGroups,
   onTogglePillar,
+  onToggleGroup,
 }: {
   tasks: Task[];
   collapsedPillars: Set<Pillar>;
+  collapsedGroups: Set<string>;
   onTogglePillar: (pillar: Pillar) => void;
+  onToggleGroup: (id: string) => void;
 }) {
   const dated = tasks.filter((task) => task.startDate && task.endDate);
   if (!dated.length)
@@ -2201,6 +2307,7 @@ function GanttView({
     ...dated.map((task) => Date.parse(`${task.endDate}T12:00:00Z`)),
   );
   const span = Math.max(1, (max - min) / 86_400_000 + 1);
+  const map = new Map(tasks.map((task) => [task.id, task]));
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[980px] p-5">
@@ -2241,7 +2348,7 @@ function GanttView({
                     {collapsedPillars.has(pillar) ? 'Expandir' : 'Recolher'}
                   </span>
                 </button>,
-                ...(collapsedPillars.has(pillar) ? [] : pillarTasks).map(
+                ...(collapsedPillars.has(pillar) ? [] : pillarTasks.filter((task) => !hiddenByCollapsedGroup(task, map, collapsedGroups))).map(
                   (task) => {
                     const start =
                       (Date.parse(`${task.startDate}T12:00:00Z`) - min) /
@@ -2260,7 +2367,9 @@ function GanttView({
                           <strong className="mr-2 text-[#103f85]">
                             {task.item}
                           </strong>
-                          {task.title}
+                          {task.kind === 'group' ? <button type="button" onClick={() => onToggleGroup(task.id)} aria-expanded={!collapsedGroups.has(task.id)} className="inline-flex items-center gap-1 font-bold text-[#103f85] hover:underline">
+                            {collapsedGroups.has(task.id) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}{task.title}
+                          </button> : task.title}
                         </div>
                         <div className="relative h-6 rounded bg-slate-100">
                           <div

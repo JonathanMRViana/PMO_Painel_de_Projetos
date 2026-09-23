@@ -11,6 +11,7 @@ export type TrackingTask = {
   item: string;
   title: string;
   owner: string;
+  criticality: string;
   durationDays: number;
   predecessorId: string | null;
   startDate: string;
@@ -33,6 +34,7 @@ export function rowToTrackingTask(row: Record<string, unknown>): TrackingTask {
     item: String(row.item),
     title: String(row.title),
     owner: String(row.owner ?? ''),
+    criticality: String(row.criticality ?? 'Médio'),
     durationDays: Number(row.duration_days ?? 0),
     predecessorId: row.predecessor_id ? String(row.predecessor_id) : null,
     startDate: String(row.start_date ?? ''),
@@ -113,7 +115,7 @@ export async function readStandardTemplate() {
       }>(),
     db
       .prepare(
-        'SELECT id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, kind, sort_order FROM project_tracking_template_tasks ORDER BY sort_order, item',
+        'SELECT id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, kind, sort_order FROM project_tracking_template_tasks ORDER BY sort_order, item',
       )
       .all(),
   ]);

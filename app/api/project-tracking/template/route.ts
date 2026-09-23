@@ -10,6 +10,7 @@ type Payload = {
   item?: string;
   title?: string;
   owner?: string;
+  criticality?: string;
   durationDays?: number;
   predecessorId?: string | null;
   kind?: string;
@@ -23,6 +24,7 @@ function clean(payload: Payload) {
     item: payload.item?.trim() ?? '',
     title: payload.title?.trim() ?? '',
     owner: payload.owner?.trim() ?? '',
+    criticality: payload.criticality?.trim() ?? 'Médio',
     durationDays: Math.max(0, Math.round(Number(payload.durationDays ?? 1))),
     predecessorId: payload.predecessorId?.trim() || null,
     kind: payload.kind?.trim() ?? 'task',
@@ -31,7 +33,8 @@ function clean(payload: Payload) {
     !pillars.includes(task.pillar as (typeof pillars)[number]) ||
     !task.item ||
     !task.title ||
-    !['group', 'task', 'milestone'].includes(task.kind)
+    !['group', 'task', 'milestone'].includes(task.kind) ||
+    !['Baixo', 'Médio', 'Alto', 'Crítico'].includes(task.criticality)
   ) {
     throw new Error('Preencha o pilar, o item e o nome da atividade.');
   }
@@ -96,7 +99,7 @@ export async function POST(request: Request) {
     statements.push(
       db
         .prepare(
-          'INSERT INTO project_tracking_template_tasks (id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, kind, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+          'INSERT INTO project_tracking_template_tasks (id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, kind, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
         )
         .bind(
           id,
@@ -105,6 +108,7 @@ export async function POST(request: Request) {
           task.item,
           task.title,
           task.owner,
+          task.criticality,
           task.kind === 'group' ? 0 : task.durationDays,
           task.predecessorId,
           task.kind,
@@ -138,12 +142,13 @@ export async function PUT(request: Request) {
     const result = await db.batch([
       db
         .prepare(
-          'UPDATE project_tracking_template_tasks SET item = ?, title = ?, owner = ?, duration_days = ?, predecessor_id = ?, kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          'UPDATE project_tracking_template_tasks SET item = ?, title = ?, owner = ?, criticality = ?, duration_days = ?, predecessor_id = ?, kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         )
         .bind(
           task.item,
           task.title,
           task.owner,
+          task.criticality,
           task.kind === 'group' ? 0 : task.durationDays,
           task.predecessorId,
           task.kind,

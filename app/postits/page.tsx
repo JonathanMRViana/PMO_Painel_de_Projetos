@@ -61,7 +61,7 @@ type Action = {
 type DateHistory = { id: string; previousDate: string; newDate: string; changedAt: string };
 type HoveredAction = { action: Action; x: number; y: number };
 type Pillar = 'Empresa' | 'Pessoas' | 'Equipamentos';
-type ProjectBuffer = { code: string; name: string; contractStartDate: string; lastScheduleDate: string; bufferDays: number | null; pillarProgress: Record<Pillar, number | null> };
+type ProjectBuffer = { code: string; name: string; scheduleId: string | null; contractStartDate: string; lastScheduleDate: string; bufferDays: number | null; pillarProgress: Record<Pillar, number | null> };
 const mobilizationPillars: Pillar[] = ['Empresa', 'Pessoas', 'Equipamentos'];
 const days: { id: Day; label: string }[] = [
   { id: 'seg', label: 'Segunda' },
@@ -464,9 +464,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     const matchingProjects = selectedProject
       ? projectBuffers.filter((project) => projectIdentity(project.name) === projectIdentity(selectedProject))
       : projectBuffers;
-    const scheduledProjects = matchingProjects.filter((project) =>
-      project.pillarProgress && mobilizationPillars.some((pillar) => project.pillarProgress[pillar] !== null),
-    );
+    const scheduledProjects = matchingProjects.filter((project) => project.scheduleId && project.pillarProgress);
     const progress = Object.fromEntries(mobilizationPillars.map((pillar) => {
       const values = scheduledProjects
         .map((project) => project.pillarProgress[pillar])

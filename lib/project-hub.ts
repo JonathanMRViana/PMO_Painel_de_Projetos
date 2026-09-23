@@ -122,8 +122,8 @@ export async function readProjectOverview() {
     db.prepare('SELECT id, code, name, color, status, contract_start_date, created_at, updated_at FROM pmo_projects ORDER BY created_at DESC, name').all(),
     db.prepare('SELECT id, name, project_code, start_date, created_at, updated_at FROM project_tracking_projects ORDER BY created_at DESC, name').all(),
     db.prepare('SELECT project_code, COUNT(*) AS total, SUM(CASE WHEN completed = 0 THEN 1 ELSE 0 END) AS open_total FROM postit_actions GROUP BY project_code').all(),
-    db.prepare("SELECT project.project_code, MAX(task.end_date) AS last_date FROM project_tracking_projects AS project INNER JOIN project_tracking_project_tasks AS task ON task.project_id = project.id WHERE task.kind != 'group' AND task.end_date != '' GROUP BY project.project_code").all(),
-    db.prepare('SELECT project_id, id, parent_id, pillar, kind, progress FROM project_tracking_project_tasks').all(),
+    db.prepare("SELECT project.project_code, MAX(task.end_date) AS last_date FROM project_tracking_projects AS project INNER JOIN project_tracking_project_tasks AS task ON task.project_id = project.id WHERE task.kind != 'group' AND task.status != 'N/A' AND task.end_date != '' GROUP BY project.project_code").all(),
+    db.prepare('SELECT project_id, id, parent_id, pillar, kind, progress, status FROM project_tracking_project_tasks').all(),
   ]);
   const schedulesByCode = new Map(
     schedules.results.map((row) => [String(row.project_code), row]),
@@ -147,7 +147,7 @@ export async function readProjectOverview() {
       const scheduleRows = schedule ? tasksBySchedule.get(String(schedule.id)) || [] : [];
       const parentIds = new Set(scheduleRows.map((task) => String(task.parent_id || '')).filter(Boolean));
       const pillarProgress = Object.fromEntries(['Empresa', 'Pessoas', 'Equipamentos'].map((pillar) => {
-        const leaves = scheduleRows.filter((task) => task.pillar === pillar && task.kind === 'task' && !parentIds.has(String(task.id)));
+        const leaves = scheduleRows.filter((task) => task.pillar === pillar && task.kind === 'task' && task.status !== 'N/A' && !parentIds.has(String(task.id)));
         return [pillar, leaves.length
           ? Math.round(leaves.reduce((sum, task) => sum + Number(task.progress || 0), 0) / leaves.length)
           : null];

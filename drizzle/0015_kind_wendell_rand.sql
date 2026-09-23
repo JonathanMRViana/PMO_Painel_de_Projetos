@@ -1,0 +1,2 @@
+ALTER TABLE `project_tracking_project_tasks` ADD `criticality` text DEFAULT 'Médio' NOT NULL;--> statement-breakpoint
+ALTER TABLE `project_tracking_template_tasks` ADD `criticality` text DEFAULT 'Médio' NOT NULL;

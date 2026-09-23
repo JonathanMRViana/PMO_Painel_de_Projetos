@@ -30,7 +30,7 @@ export async function ensureProjectSchedule(projectCode: string): Promise<Schedu
       .bind(projectId, hubProject.name, projectCode, template.revision, '', now, now),
     ...template.tasks.map((task) =>
       db
-        .prepare('INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)')
+        .prepare('INSERT INTO project_tracking_project_tasks (id, project_id, source_task_id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, start_date, end_date, progress, status, observation, kind, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)')
         .bind(
           `${projectId}:${task.id}`,
           projectId,
@@ -40,6 +40,7 @@ export async function ensureProjectSchedule(projectCode: string): Promise<Schedu
           task.item,
           task.title,
           task.owner,
+          task.criticality,
           task.durationDays,
           task.predecessorId ? `${projectId}:${task.predecessorId}` : null,
           '',
