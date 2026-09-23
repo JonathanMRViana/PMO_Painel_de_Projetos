@@ -106,9 +106,10 @@
 .postitTop em { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .postitTop { position:relative; padding-top:12px; }
 .postitTop .dueDate { position:absolute; top:0; right:0; margin:0; white-space:nowrap; font-size:8px; letter-spacing:-.02em; }
-.mobilizationPillars { display:grid; grid-template-columns:1fr; gap:9px; margin-top:12px; }
-.mobilizationPillar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px; align-items:center; min-width:0; color:#111; font-size:10px; }
-.mobilizationPillar > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
-.mobilizationPillar strong { color:#111; font-size:11px; }
-.mobilizationPillar > i { grid-column:1/-1; height:8px; overflow:hidden; border:1px solid #111; border-radius:2px; background:transparent; }
-.mobilizationPillar > i > span { height:100%; border-right:1px solid #111; background:transparent; }
+.mobilizationPillars { display:grid; grid-template-columns:1fr; gap:12px; margin-top:15px; }
+.mobilizationPillar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 10px; align-items:center; min-width:0; color:#34465c; font-size:11px; }
+.mobilizationPillarName { display:inline-flex; align-items:center; gap:7px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+.mobilizationPillarName svg { flex:none; color:#243246; }
+.mobilizationPillar strong { color:#103f85; font-size:11px; font-variant-numeric:tabular-nums; }
+.mobilizationProgress { grid-column:1/-1; height:7px; overflow:hidden; border-radius:999px; background:#e8eef7; }
+.mobilizationProgress > span { display:block; height:100%; border-radius:inherit; background:#103f85; transition:width .25s ease; }

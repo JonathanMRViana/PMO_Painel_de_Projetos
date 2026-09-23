@@ -4,15 +4,18 @@ import { officialEditorUrl, redirectToOfficialEditor } from '@/lib/github-pages-
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
+  Building2,
   CheckCircle2,
   CircleAlert,
   Copy,
   FileText,
   GripVertical,
+  HardHat,
   Plus,
   Pencil,
   Search,
   Trash2,
+  Truck,
   UserRound,
   X,
 } from 'lucide-react';
@@ -63,6 +66,7 @@ type HoveredAction = { action: Action; x: number; y: number };
 type Pillar = 'Empresa' | 'Pessoas' | 'Equipamentos';
 type ProjectBuffer = { code: string; name: string; scheduleId: string | null; contractStartDate: string; lastScheduleDate: string; bufferDays: number | null; pillarProgress: Record<Pillar, number | null> };
 const mobilizationPillars: Pillar[] = ['Empresa', 'Pessoas', 'Equipamentos'];
+const mobilizationPillarIcons = { Empresa: Building2, Pessoas: HardHat, Equipamentos: Truck };
 const days: { id: Day; label: string }[] = [
   { id: 'seg', label: 'Segunda' },
   { id: 'ter', label: 'Terça' },
@@ -928,13 +932,18 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
             <CheckCircle2 size={16} /> Resumo de Mobilização
           </div>
           {mobilizationSummary.projectCount ? <>
-            <p>{selectedProject ? selectedProject : `Média de ${mobilizationSummary.projectCount} ${mobilizationSummary.projectCount === 1 ? 'projeto' : 'projetos'} com cronograma`}</p>
             <div className={styles.mobilizationPillars}>
-              {mobilizationPillars.map((pillar) => <div className={styles.mobilizationPillar} key={pillar}>
-                <span>{pillar}</span>
-                <strong>{mobilizationSummary.progress[pillar] === null ? '—' : `${mobilizationSummary.progress[pillar]}%`}</strong>
-                <i><span style={{ width: `${mobilizationSummary.progress[pillar] ?? 0}%`, display: (mobilizationSummary.progress[pillar] ?? 0) > 0 ? 'block' : 'none' }} /></i>
-              </div>)}
+              {mobilizationPillars.map((pillar) => {
+                const Icon = mobilizationPillarIcons[pillar];
+                const progress = mobilizationSummary.progress[pillar];
+                return <div className={styles.mobilizationPillar} key={pillar}>
+                  <span className={styles.mobilizationPillarName}><Icon size={15} strokeWidth={1.8} aria-hidden="true" />{pillar}</span>
+                  <strong>{progress === null ? '—' : `${progress}%`}</strong>
+                  <div className={styles.mobilizationProgress} role="progressbar" aria-label={`${pillar}: ${progress === null ? 'sem dados' : `${progress}% concluído`}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined}>
+                    <span style={{ width: `${progress ?? 0}%` }} />
+                  </div>
+                </div>;
+              })}
             </div>
           </> : <p>{selectedProject ? 'Cronograma do projeto pendente.' : 'Nenhum cronograma de projeto disponível.'}</p>}
         </div>
