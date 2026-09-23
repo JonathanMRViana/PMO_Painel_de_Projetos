@@ -935,7 +935,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               {mobilizationPillars.map((pillar) => <div className={styles.mobilizationPillar} key={pillar}>
                 <span>{pillar}</span>
                 <strong>{mobilizationSummary.progress[pillar] === null ? '—' : `${mobilizationSummary.progress[pillar]}%`}</strong>
-                <i><span style={{ width: `${mobilizationSummary.progress[pillar] ?? 0}%` }} /></i>
+                <i><span style={{ width: `${mobilizationSummary.progress[pillar] ?? 0}%`, display: (mobilizationSummary.progress[pillar] ?? 0) > 0 ? 'block' : 'none' }} /></i>
               </div>)}
             </div>
           </> : <p>{selectedProject ? 'Cronograma do projeto pendente.' : 'Nenhum cronograma de projeto disponível.'}</p>}
