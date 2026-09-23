@@ -3,6 +3,8 @@
 const apiOrigin = 'https://pmo-makro-cockpit.finfred-6125.chatgpt.site';
 const tokenKey = 'pmo-editor-api-token';
 
+export const officialEditorUrl = (route: string) => `${apiOrigin}${route}`;
+
 export function isGitHubPages() {
   return typeof window !== 'undefined' && window.location.hostname === 'jonathanmrviana.github.io';
 }
@@ -41,12 +43,20 @@ if (typeof window !== 'undefined' && isGitHubPages() && !window.__pmoApiPatched)
   };
   window.__pmoApiPatched = true;
   document.addEventListener('click', (event) => {
-    const link = (event.target as Element).closest<HTMLAnchorElement>('a[href^="/"]');
+    const link = (event.target as Element).closest<HTMLAnchorElement>('a');
     if (!link || link.target === '_blank' || event.metaKey || event.ctrlKey) return;
+    if (event.defaultPrevented) return;
+    if (link.dataset.pmoEditorLink === 'postits') {
+      event.preventDefault();
+      const project = new URLSearchParams(window.location.search).get('projeto') || '';
+      window.location.assign(officialEditorUrl(`/postits?projeto=${encodeURIComponent(project)}`));
+      return;
+    }
+    if (!link.getAttribute('href')?.startsWith('/')) return;
     const [route, query = ''] = link.getAttribute('href')!.split('?');
     if (!['/', '/postits', '/acompanhamento', '/projetos', '/projetos/detalhe', '/visao-executiva', '/postits/visualizar'].includes(route)) return;
     event.preventDefault();
-    const page = route === '/' ? '' : `${route}.html`;
+    const page = route === '/' ? '' : `${route.slice(1)}.html`;
     window.location.href = `/PMO_Painel_de_Projetos/${page}${query ? `?${query}` : ''}`;
   });
 }

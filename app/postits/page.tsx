@@ -1,6 +1,6 @@
 'use client';
 import '@/lib/github-pages-api';
-import { redirectToOfficialEditor } from '@/lib/github-pages-api';
+import { officialEditorUrl, redirectToOfficialEditor } from '@/lib/github-pages-api';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -742,7 +742,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 <Plus /> Nova ação
               </Button>
             </>}
-            {viewOnly ? <a href={`/postits?projeto=${encodeURIComponent(selectedProject || '')}`} className={styles.newButton} onClick={(event) => {
+            {viewOnly ? <a href={officialEditorUrl(`/postits?projeto=${encodeURIComponent(selectedProject || '')}`)} data-pmo-editor-link="postits" className={styles.newButton} onClick={(event) => {
               event.preventDefault();
               const project = selectedProject || new URLSearchParams(window.location.search).get('projeto') || '';
               const route = `/postits?projeto=${encodeURIComponent(project)}`;
