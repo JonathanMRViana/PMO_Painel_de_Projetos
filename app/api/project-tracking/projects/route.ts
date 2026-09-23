@@ -358,10 +358,10 @@ export async function PUT(request: Request) {
     const taskId = body.taskId.trim();
     const current = await db
       .prepare(
-        'SELECT kind, status, criticality FROM project_tracking_project_tasks WHERE id = ? AND project_id = ?',
+        'SELECT kind, status, criticality, pillar, item, observation, start_date, actual_start_date FROM project_tracking_project_tasks WHERE id = ? AND project_id = ?',
       )
       .bind(taskId, projectId)
-      .first<{ kind: string; status: string; criticality: string }>();
+      .first<{ kind: string; status: string; criticality: string; pillar: string; item: string; observation: string; start_date: string; actual_start_date: string }>();
     if (!current)
       return Response.json(
         { error: 'Atividade não encontrada.' },
@@ -454,8 +454,15 @@ export async function PUT(request: Request) {
       .bind(projectId)
       .first<{ name: string; project_code: string }>();
     if (project) await syncScheduleActions();
-    await syncOprFleetsFromSchedules();
-    return Response.json({ updatedAt });
+    if (
+      current.pillar === 'Equipamentos' && current.item.startsWith('EQ.') &&
+      (current.observation !== String(body.observation ?? '').trim() ||
+        current.start_date !== startDate || current.actual_start_date !== actualStartDate)
+    ) await syncOprFleetsFromSchedules();
+    const savedTask = await db.prepare(
+      'SELECT id, parent_id, pillar, item, title, owner, criticality, duration_days, predecessor_id, start_date, end_date, actual_start_date, actual_end_date, linked_action_id, progress, status, observation, kind, sort_order FROM project_tracking_project_tasks WHERE id = ? AND project_id = ?',
+    ).bind(taskId, projectId).first();
+    return Response.json({ updatedAt, task: savedTask ? rowToTrackingTask(savedTask as Record<string, unknown>) : null });
   } catch (error) {
     return trackingError(error, 'Não foi possível atualizar o cronograma.');
   }

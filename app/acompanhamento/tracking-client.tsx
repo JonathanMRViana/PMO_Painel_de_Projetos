@@ -626,29 +626,39 @@ export function TrackingClient() {
     );
   }
 
+  async function persistProjectTask(task: Task) {
+    if (!selectedProject) throw new Error('Selecione um projeto.');
+    const result = await json<{ task: Task }>(
+      await fetch('/api/project-tracking/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProject.id, taskId: task.id, ...task }),
+      }),
+    );
+    if (!result.task) throw new Error('A atividade foi salva, mas não pôde ser confirmada.');
+    return result.task;
+  }
+
   async function saveProjectTask(task: Task) {
     if (!selectedProject) return;
     setError('');
     setNotice('');
     try {
-      await json(
-        await fetch('/api/project-tracking/projects', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId: selectedProject.id,
-            taskId: task.id,
-            ...task,
-          }),
-        }),
-      );
-      await loadProject(selectedProject.id);
+      const saved = await persistProjectTask(task);
+      setProjectTasks((current) => current.map((row) =>
+        row.id === task.id && (Object.keys(task) as (keyof Task)[]).every((key) => row[key] === task[key])
+          ? saved : row,
+      ));
+      if (saved.linkedActionId) {
+        setProjectActions((current) => current.filter((action) => action.id !== `schedule:${selectedProject.id}:${task.id}`));
+      }
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
           : 'Não foi possível salvar a atividade.',
       );
+      await loadProject(selectedProject.id);
     }
   }
 
@@ -686,16 +696,15 @@ export function TrackingClient() {
     });
   }
 
-  async function createLinkedAction() {
-    if (!selectedProject || !linkedActionDraft) return;
-    const draft = linkedActionDraft;
+  async function createLinkedAction(draft: LinkedActionDraft) {
+    if (!selectedProject) return;
     if (!draft.title.trim() || !draft.owner.trim() || !draft.date || !draft.sector)
       return setError('Informe título, responsável, prazo previsto e setor da ação.');
     setSaving(true);
     setError('');
     setNotice('');
     try {
-      const created = await json<{ action: { id: string } }>(
+      const created = await json<{ action: { id: string; title: string; date: string; completed: boolean } }>(
         await fetch('/api/postit-actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -713,20 +722,13 @@ export function TrackingClient() {
           }),
         }),
       );
-      await json(
-        await fetch('/api/project-tracking/projects', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId: selectedProject.id,
-            taskId: draft.task.id,
-            ...draft.task,
-            linkedActionId: created.action.id,
-          }),
-        }),
-      );
+      const saved = await persistProjectTask({ ...draft.task, linkedActionId: created.action.id });
+      setProjectTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+      setProjectActions((current) => [
+        ...current.filter((action) => action.id !== `schedule:${selectedProject.id}:${draft.task.id}`),
+        { id: created.action.id, title: created.action.title, actionDate: created.action.date, completed: created.action.completed },
+      ]);
       setLinkedActionDraft(null);
-      await loadProject(selectedProject.id);
       setNotice('Ação criada no quadro e vinculada à tarefa do cronograma.');
     } catch (reason) {
       setError(
@@ -1474,125 +1476,15 @@ export function TrackingClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={Boolean(linkedActionDraft)}
-        onOpenChange={(open) => {
-          if (!open && !saving) setLinkedActionDraft(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Criar ação vinculada</DialogTitle>
-            <DialogDescription>
-              A ação será criada no Quadro de Ações e ficará vinculada à tarefa{' '}
-              {linkedActionDraft?.task.item} do projeto {selectedProject?.name}.
-            </DialogDescription>
-          </DialogHeader>
-          {linkedActionDraft && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-                Título da ação
-                <Input
-                  value={linkedActionDraft.title}
-                  onChange={(event) =>
-                    setLinkedActionDraft((draft) =>
-                      draft ? { ...draft, title: event.target.value } : draft,
-                    )
-                  }
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-                Observação
-                <textarea
-                  value={linkedActionDraft.observation}
-                  onChange={(event) =>
-                    setLinkedActionDraft((draft) =>
-                      draft
-                        ? { ...draft, observation: event.target.value }
-                        : draft,
-                    )
-                  }
-                  className="min-h-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#103f85]"
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                Responsável
-                <Input
-                  value={linkedActionDraft.owner}
-                  onChange={(event) =>
-                    setLinkedActionDraft((draft) =>
-                      draft ? { ...draft, owner: event.target.value } : draft,
-                    )
-                  }
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                Prazo previsto
-                <Input
-                  type="date"
-                  value={linkedActionDraft.date}
-                  onChange={(event) =>
-                    setLinkedActionDraft((draft) =>
-                      draft ? { ...draft, date: event.target.value } : draft,
-                    )
-                  }
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                Setor
-                <select
-                  value={linkedActionDraft.sector}
-                  onChange={(event) =>
-                    setLinkedActionDraft((draft) =>
-                      draft ? { ...draft, sector: event.target.value } : draft,
-                    )
-                  }
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm"
-                >
-                  {[...new Set([linkedActionDraft.sector, ...boardSectors])].map(
-                    (sector) => (
-                      <option key={sector}>{sector}</option>
-                    ),
-                  )}
-                </select>
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                Criticidade
-                <select
-                  value={linkedActionDraft.criticality}
-                  onChange={(event) =>
-                    setLinkedActionDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            criticality: event.target.value as LinkedActionDraft['criticality'],
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm"
-                >
-                  {['Baixo', 'Médio', 'Alto', 'Crítico'].map((level) => (
-                    <option key={level}>{level}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setLinkedActionDraft(null)}
-              disabled={saving}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => void createLinkedAction()} disabled={saving}>
-              {saving ? 'Criando...' : 'Criar e vincular'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {linkedActionDraft && <LinkedActionDialog
+        key={linkedActionDraft.task.id}
+        initialDraft={linkedActionDraft}
+        projectName={selectedProject?.name ?? ''}
+        sectors={boardSectors}
+        saving={saving}
+        onClose={() => setLinkedActionDraft(null)}
+        onCreate={createLinkedAction}
+      />}
 
       <AlertDialog
         open={Boolean(deleteTask)}
@@ -1669,6 +1561,63 @@ export function TrackingClient() {
       </AlertDialog>
     </main>
   );
+}
+
+function LinkedActionDialog({ initialDraft, projectName, sectors, saving, onClose, onCreate }: {
+  initialDraft: LinkedActionDraft;
+  projectName: string;
+  sectors: string[];
+  saving: boolean;
+  onClose: () => void;
+  onCreate: (draft: LinkedActionDraft) => void;
+}) {
+  const [draft, setDraft] = useState(initialDraft);
+  return <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <DialogContent className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Criar ação vinculada</DialogTitle>
+        <DialogDescription>
+          A ação será criada no Quadro de Ações e ficará vinculada à tarefa {draft.task.item} do projeto {projectName}.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+          Título da ação
+          <Input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+          Observação
+          <textarea value={draft.observation} onChange={(event) => setDraft((current) => ({ ...current, observation: event.target.value }))} className="min-h-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#103f85]" />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold">
+          Responsável
+          <Input value={draft.owner} onChange={(event) => setDraft((current) => ({ ...current, owner: event.target.value }))} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold">
+          Prazo previsto
+          <Input type="date" value={draft.date} onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold">
+          Setor
+          <select value={draft.sector} onChange={(event) => setDraft((current) => ({ ...current, sector: event.target.value }))} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm">
+            {[...new Set([draft.sector, ...sectors])].map((sector) => <option key={sector}>{sector}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-semibold">
+          Criticidade
+          <select value={draft.criticality} onChange={(event) => setDraft((current) => ({ ...current, criticality: event.target.value as Criticality }))} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm">
+            {criticalities.map((level) => <option key={level}>{level}</option>)}
+          </select>
+        </label>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+        <Button onClick={() => onCreate(draft)} disabled={saving || !draft.title.trim() || !draft.owner.trim() || !draft.date || !draft.sector}>
+          {saving ? 'Criando...' : 'Criar e vincular'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 function PillarRow({
@@ -1926,7 +1875,9 @@ function ProjectScheduleTable({
   onDeleteEquipment: (task: Task) => void;
 }) {
   const [editingPredecessorId, setEditingPredecessorId] = useState<string | null>(null);
+  const [editingLinkedActionId, setEditingLinkedActionId] = useState<string | null>(null);
   const map = new Map(tasks.map((task) => [task.id, task]));
+  const actionMap = new Map(actions.map((action) => [action.id, action]));
   const choices = tasks.filter((task) => task.kind !== 'group');
   const plannedRange = (pillar: Pillar) => {
     const scheduled = tasks
@@ -2003,6 +1954,7 @@ function ProjectScheduleTable({
                 ...(collapsedPillars.has(pillar) ? [] : pillarTasks.filter((task) => !hiddenByCollapsedGroup(task, map, collapsedGroups))).map(
                   (task) => {
                     const summary = task.kind === 'group';
+                    const linkedAction = actionMap.get(task.linkedActionId ?? '');
                     return (
                       <tr
                         key={task.id}
@@ -2220,24 +2172,41 @@ function ProjectScheduleTable({
                             '—'
                           ) : (
                             <div className="grid gap-1.5">
-                              <select
-                                value={task.linkedActionId ?? ''}
-                                disabled={!editable}
-                                onChange={(e) =>
-                                  onChange(task.id, {
-                                    linkedActionId: e.target.value || null,
-                                  })
-                                }
-                                className={`${fieldClass} w-full`}
-                              >
-                                <option value="">Selecionar ação existente</option>
-                                {actions.map((action) => (
-                                  <option key={action.id} value={action.id}>
-                                    {action.completed ? 'Concluída · ' : ''}
-                                    {action.title} · {formatDate(action.actionDate)}
-                                  </option>
-                                ))}
-                              </select>
+                              {!editable ? (
+                                <span className="text-xs" title={linkedAction?.title}>{linkedAction?.title ?? (task.linkedActionId ? 'Ação vinculada' : '—')}</span>
+                              ) : editingLinkedActionId === task.id ? (
+                                <select
+                                  autoFocus
+                                  data-immediate
+                                  value={task.linkedActionId ?? ''}
+                                  onChange={(event) => {
+                                    const linkedActionId = event.target.value || null;
+                                    onChange(task.id, { linkedActionId });
+                                    onSave({ ...task, linkedActionId });
+                                    setEditingLinkedActionId(null);
+                                  }}
+                                  onBlur={() => setEditingLinkedActionId(null)}
+                                  aria-label={`Vincular ação a ${task.title}`}
+                                  className={`${fieldClass} w-full`}
+                                >
+                                  <option value="">Sem ação vinculada</option>
+                                  {actions.map((action) => (
+                                    <option key={action.id} value={action.id}>
+                                      {action.completed ? 'Concluída · ' : ''}
+                                      {action.title} · {formatDate(action.actionDate)}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingLinkedActionId(task.id)}
+                                  className="min-h-9 w-full truncate rounded-lg border border-slate-200 bg-white px-2 text-left text-xs text-[#103f85]"
+                                  title={linkedAction?.title}
+                                >
+                                  {linkedAction?.title ?? (task.linkedActionId ? 'Ação vinculada' : 'Selecionar ação existente')}
+                                </button>
+                              )}
                               {editable && (
                                 <button
                                   type="button"
