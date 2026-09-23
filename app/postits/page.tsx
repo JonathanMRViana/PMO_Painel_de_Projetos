@@ -816,7 +816,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                       >
                         <button
                           className={styles.postitBody}
-                          onClick={() => { if (viewOnly) setViewing(a); else if (canEdit) edit(a); }}
+                          onClick={() => { if (canEdit) edit(a); else setViewing(a); }}
                         >
                           <span className={styles.postitTop}>
                             <GripVertical size={14} />
@@ -1129,6 +1129,8 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               <p>{viewing.observation || 'Sem observação registrada.'}</p>
               <span><UserRound size={14} /> Responsável: <b>{viewing.owner}</b></span>
               <span>Data de conclusão: <b>{formatDate(viewing.date)}</b></span>
+              <span>Data de inclusão: <b>{formatDate(viewing.createdAt)}</b></span>
+              <span>Tempo em aberto: <b>{openDuration(viewing.createdAt, viewing.completed)}</b></span>
               <span>Criticidade: <b>{viewing.criticality}</b></span>
               <span>Status: <b>{state(viewing)}</b></span>
             </div>
