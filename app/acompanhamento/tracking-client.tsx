@@ -1,5 +1,6 @@
 'use client';
 import '@/lib/github-pages-api';
+import { redirectToOfficialEditor } from '@/lib/github-pages-api';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -469,6 +470,7 @@ export function TrackingClient() {
   function requireAccess(
     action: 'project' | 'task' | 'schedule' | 'deleteProject',
   ) {
+    if (redirectToOfficialEditor()) return;
     if (isEditor) {
       if (action === 'project') setProjectDialogOpen(true);
       if (action === 'task')

@@ -1,5 +1,6 @@
 'use client';
 import '@/lib/github-pages-api';
+import { redirectToOfficialEditor } from '@/lib/github-pages-api';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -741,7 +742,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 <Plus /> Nova ação
               </Button>
             </>}
-            {viewOnly ? <a href={`/postits?projeto=${encodeURIComponent(selectedProject || '')}`} className={styles.newButton}>Acessar edição</a> : !editorMode && <Button className={styles.newButton} onClick={() => setLoginOpen(true)}>Acessar edição</Button>}
+            {viewOnly ? <a href={`/postits?projeto=${encodeURIComponent(selectedProject || '')}`} className={styles.newButton} onClick={(event) => { if (redirectToOfficialEditor(`/postits?projeto=${encodeURIComponent(selectedProject || '')}`)) event.preventDefault(); }}>Acessar edição</a> : !editorMode && <Button className={styles.newButton} onClick={() => { if (!redirectToOfficialEditor()) setLoginOpen(true); }}>Acessar edição</Button>}
           </div>
         </div>
         {error && (

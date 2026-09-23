@@ -3,8 +3,18 @@
 const apiOrigin = 'https://pmo-makro-cockpit.finfred-6125.chatgpt.site';
 const tokenKey = 'pmo-editor-api-token';
 
-function isGitHubPages() {
+export function isGitHubPages() {
   return typeof window !== 'undefined' && window.location.hostname === 'jonathanmrviana.github.io';
+}
+
+export function redirectToOfficialEditor(route?: string) {
+  if (!isGitHubPages()) return false;
+  const currentRoute = window.location.pathname
+    .replace(/^\/PMO_Painel_de_Projetos\/?/, '/')
+    .replace(/\.html$/, '');
+  const destination = route || `${currentRoute === '/postits/visualizar' ? '/postits' : currentRoute}${window.location.search}`;
+  window.location.assign(`${apiOrigin}${destination}`);
+  return true;
 }
 
 if (typeof window !== 'undefined' && isGitHubPages() && !window.__pmoApiPatched) {
@@ -16,6 +26,10 @@ if (typeof window !== 'undefined' && isGitHubPages() && !window.__pmoApiPatched)
     const isApi = path.startsWith('/api/');
     if (!isApi) return nativeFetch(input, init);
 
+    const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    if (path === '/api/editor-session' && method === 'POST') {
+      return Response.json({ error: 'Acesse a edição pelo painel oficial.' }, { status: 403 });
+    }
     const headers = new Headers(init.headers);
     const response = await nativeFetch(`${apiOrigin}${path}`, { ...init, headers });
 

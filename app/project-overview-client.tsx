@@ -1,5 +1,6 @@
 'use client';
 import '@/lib/github-pages-api';
+import { redirectToOfficialEditor } from '@/lib/github-pages-api';
 
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ClipboardList, Folder, FolderKanban, KeyRound, Plus, Search } from 'lucide-react';
@@ -113,7 +114,7 @@ export function ProjectOverviewClient() {
     <section className="mt-5">
       <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
         {editor && <Button onClick={() => setOpen(true)}><Plus /> Novo projeto</Button>}
-        {!editor && <Button variant="outline" onClick={() => setAuthOpen(true)}><KeyRound /> Acessar edição</Button>}
+        {!editor && <Button variant="outline" onClick={() => { if (!redirectToOfficialEditor()) setAuthOpen(true); }}><KeyRound /> Acessar edição</Button>}
       </div>
       {projects.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center"><FolderKanban className="mx-auto text-[#103f85]" size={30} /><p className="mt-3 font-semibold">Nenhum projeto cadastrado.</p><p className="mt-1 text-sm text-slate-600">Crie o primeiro projeto para organizar cronograma e ações.</p></div>
