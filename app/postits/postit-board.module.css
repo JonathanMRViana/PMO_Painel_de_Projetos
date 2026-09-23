@@ -103,3 +103,5 @@
 .statusCounts .criticalityCount[data-level='Alto'] { color:#a76808; }
 .statusCounts .criticalityCount[data-level='Médio'] { color:#40647a; }
 .statusCounts .criticalityCount[data-level='Baixo'] { color:#237955; }
+.postitTop em { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.postitTop .dueDate { flex:none; margin-left:auto; white-space:nowrap; font-size:9px; }

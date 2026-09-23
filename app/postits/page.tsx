@@ -314,6 +314,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     [editing, setEditing] = useState<Action | null>(null),
     [creating, setCreating] = useState(false),
     [showCompleted, setShowCompleted] = useState(false),
+    [calendarDay, setCalendarDay] = useState(''),
     [query, setQuery] = useState(''),
     [viewing, setViewing] = useState<Action | null>(null),
     [hovered, setHovered] = useState<HoveredAction | null>(null),
@@ -350,6 +351,15 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
       .finally(() => setAuthChecked(true));
   }, [viewOnly]);
   useEffect(() => {
+    const refreshDay = () => {
+      const today = new Date().toDateString();
+      setCalendarDay((current) => current === today ? current : today);
+    };
+    refreshDay();
+    const interval = window.setInterval(refreshDay, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+  useEffect(() => {
     if (authChecked) void load();
   }, [authChecked]);
   useEffect(() => {
@@ -357,6 +367,9 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     if (project) setSelectedProject(project);
   }, [searchParams]);
   const canEdit = !viewOnly && editorMode;
+  const headerDates = useMemo(() => calendarDay
+    ? Object.fromEntries(days.filter((day) => day.id !== 'd7').map((day) => [day.id, formatDate(dateForDay(day.id)).slice(0, 5)])) as Partial<Record<Day, string>>
+    : {}, [calendarDay]);
   async function load() {
     setLoading(true);
     setError(null);
@@ -749,6 +762,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
               key={d.id}
             >
               <strong>{d.label}</strong>
+              {d.id !== 'd7' && headerDates[d.id] && <span>({headerDates[d.id]})</span>}
             </div>
           ))}
           {sectors.map((sector) => (
@@ -787,6 +801,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                           <span className={styles.postitTop}>
                             <GripVertical size={14} />
                             <em>{a.project}</em>
+                            <b className={styles.dueDate} title="Data prevista de finalização">{formatDate(a.date)}</b>
                           </span>
                           <strong>{a.title}</strong>
                           <span className={styles.observation}>
