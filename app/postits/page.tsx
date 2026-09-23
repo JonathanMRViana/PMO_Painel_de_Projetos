@@ -364,7 +364,7 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     if (authChecked) void load();
   }, [authChecked]);
   useEffect(() => {
-    const project = searchParams.get('projeto')?.trim();
+    const project = new URLSearchParams(window.location.search).get('projeto')?.trim() || searchParams.get('projeto')?.trim();
     if (project) setSelectedProject(project);
   }, [searchParams]);
   const canEdit = !viewOnly && editorMode;
@@ -742,7 +742,12 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
                 <Plus /> Nova ação
               </Button>
             </>}
-            {viewOnly ? <a href={`/postits?projeto=${encodeURIComponent(selectedProject || '')}`} className={styles.newButton} onClick={(event) => { if (redirectToOfficialEditor(`/postits?projeto=${encodeURIComponent(selectedProject || '')}`)) event.preventDefault(); }}>Acessar edição</a> : !editorMode && <Button className={styles.newButton} onClick={() => { if (!redirectToOfficialEditor()) setLoginOpen(true); }}>Acessar edição</Button>}
+            {viewOnly ? <a href={`/postits?projeto=${encodeURIComponent(selectedProject || '')}`} className={styles.newButton} onClick={(event) => {
+              event.preventDefault();
+              const project = selectedProject || new URLSearchParams(window.location.search).get('projeto') || '';
+              const route = `/postits?projeto=${encodeURIComponent(project)}`;
+              if (!redirectToOfficialEditor(route)) window.location.assign(route);
+            }}>Acessar edição</a> : !editorMode && <Button className={styles.newButton} onClick={() => { if (!redirectToOfficialEditor()) setLoginOpen(true); }}>Acessar edição</Button>}
           </div>
         </div>
         {error && (
