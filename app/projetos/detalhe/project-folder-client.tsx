@@ -3,7 +3,6 @@ import '@/lib/github-pages-api';
 import { redirectToOfficialEditor } from '@/lib/github-pages-api';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { CalendarDays, ClipboardList, Plus, Save, Trash2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,7 +18,7 @@ const sections: { id: ScopeSection | 'fleet'; label: string }[] = [
 ];
 
 export function ProjectFolderClient() {
-  const code = useSearchParams().get('codigo')?.trim() || '';
+  const [code, setCode] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [scope, setScope] = useState<ProjectScope>(emptyProjectScope());
   const [contractStartDate, setContractStartDate] = useState('');
@@ -59,7 +58,10 @@ export function ProjectFolderClient() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void load(); }, [code]);
+  useEffect(() => {
+    setCode(new URLSearchParams(window.location.search).get('codigo')?.trim() || '');
+  }, []);
+  useEffect(() => { if (code !== null) void load(); }, [code]);
 
   function updateRow(section: ScopeSection, id: string, key: string, value: string) {
     setScope((current) => ({ ...current, [section]: current[section].map((row) => row.id === id ? { ...row, [key]: value } : row) }));
