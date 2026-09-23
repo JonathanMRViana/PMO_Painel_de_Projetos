@@ -60,7 +60,9 @@ type Action = {
 };
 type DateHistory = { id: string; previousDate: string; newDate: string; changedAt: string };
 type HoveredAction = { action: Action; x: number; y: number };
-type ProjectBuffer = { code: string; name: string; contractStartDate: string; lastScheduleDate: string; bufferDays: number | null };
+type Pillar = 'Empresa' | 'Pessoas' | 'Equipamentos';
+type ProjectBuffer = { code: string; name: string; contractStartDate: string; lastScheduleDate: string; bufferDays: number | null; pillarProgress: Record<Pillar, number | null> };
+const mobilizationPillars: Pillar[] = ['Empresa', 'Pessoas', 'Equipamentos'];
 const days: { id: Day; label: string }[] = [
   { id: 'seg', label: 'Segunda' },
   { id: 'ter', label: 'Terça' },
@@ -458,6 +460,21 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
     ])),
     [actions, projects],
   );
+  const mobilizationSummary = useMemo(() => {
+    const matchingProjects = selectedProject
+      ? projectBuffers.filter((project) => projectIdentity(project.name) === projectIdentity(selectedProject))
+      : projectBuffers;
+    const scheduledProjects = matchingProjects.filter((project) =>
+      project.pillarProgress && mobilizationPillars.some((pillar) => project.pillarProgress[pillar] !== null),
+    );
+    const progress = Object.fromEntries(mobilizationPillars.map((pillar) => {
+      const values = scheduledProjects
+        .map((project) => project.pillarProgress[pillar])
+        .filter((value): value is number => typeof value === 'number');
+      return [pillar, values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null];
+    })) as Record<Pillar, number | null>;
+    return { progress, projectCount: scheduledProjects.length };
+  }, [projectBuffers, selectedProject]);
   const reportActions = useMemo(
     () => actions
       .filter((action) =>
@@ -515,11 +532,6 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
       setError('Não foi possível copiar o relatório. Tente novamente.');
     }
   }
-  const attention = actions
-    .filter(
-      (a) => !a.completed && (state(a) === 'Crítico' || state(a) === 'Atenção'),
-    )
-    .slice(0, 3);
   const edit = (a: Action) => {
     const { id, ...rest } = a;
     setForm(rest);
@@ -913,21 +925,20 @@ export default function PostitBoardPage({ viewOnly = false }: { viewOnly?: boole
           </div>
           <p>Início do contrato menos último término previsto do cronograma.</p>
         </div>
-        <div className={[styles.controlCard, styles.attentionCard].join(' ')}>
+        <div className={styles.controlCard}>
           <div className={styles.cardTitle}>
-            <CircleAlert size={16} /> Atenções para a reunião
+            <CheckCircle2 size={16} /> Resumo de Mobilização
           </div>
-          <ul>
-            {attention.map((a) => (
-              <li key={a.id}>
-                <span
-                  className={styles['status' + state(a).replace(' ', '')]}
-                />
-                <b>{a.title}</b>
-                <small>{a.owner} · {a.criticality}</small>
-              </li>
-            ))}
-          </ul>
+          {mobilizationSummary.projectCount ? <>
+            <p>{selectedProject ? selectedProject : `Média de ${mobilizationSummary.projectCount} ${mobilizationSummary.projectCount === 1 ? 'projeto' : 'projetos'} com cronograma`}</p>
+            <div className={styles.mobilizationPillars}>
+              {mobilizationPillars.map((pillar) => <div className={styles.mobilizationPillar} key={pillar}>
+                <span>{pillar}</span>
+                <strong>{mobilizationSummary.progress[pillar] === null ? '—' : `${mobilizationSummary.progress[pillar]}%`}</strong>
+                <i><span style={{ width: `${mobilizationSummary.progress[pillar] ?? 0}%` }} /></i>
+              </div>)}
+            </div>
+          </> : <p>{selectedProject ? 'Cronograma do projeto pendente.' : 'Nenhum cronograma de projeto disponível.'}</p>}
         </div>
       </section>
       {canEdit && <Dialog

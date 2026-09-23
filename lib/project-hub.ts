@@ -118,11 +118,12 @@ export async function ensureProjectRegistry() {
 export async function readProjectOverview() {
   const db = getDb();
   await ensureProjectRegistry();
-  const [projects, schedules, actionCounts, lastScheduleDates] = await Promise.all([
+  const [projects, schedules, actionCounts, lastScheduleDates, scheduleTasks] = await Promise.all([
     db.prepare('SELECT id, code, name, color, status, contract_start_date, created_at, updated_at FROM pmo_projects ORDER BY created_at DESC, name').all(),
     db.prepare('SELECT id, name, project_code, start_date, created_at, updated_at FROM project_tracking_projects ORDER BY created_at DESC, name').all(),
     db.prepare('SELECT project_code, COUNT(*) AS total, SUM(CASE WHEN completed = 0 THEN 1 ELSE 0 END) AS open_total FROM postit_actions GROUP BY project_code').all(),
     db.prepare("SELECT project.project_code, MAX(task.end_date) AS last_date FROM project_tracking_projects AS project INNER JOIN project_tracking_project_tasks AS task ON task.project_id = project.id WHERE task.kind != 'group' AND task.end_date != '' GROUP BY project.project_code").all(),
+    db.prepare('SELECT project_id, id, parent_id, pillar, kind, progress FROM project_tracking_project_tasks').all(),
   ]);
   const schedulesByCode = new Map(
     schedules.results.map((row) => [String(row.project_code), row]),
@@ -131,6 +132,11 @@ export async function readProjectOverview() {
     actionCounts.results.map((row) => [String(row.project_code), row]),
   );
   const lastDateByCode = new Map(lastScheduleDates.results.map((row) => [String(row.project_code), String(row.last_date || '')]));
+  const tasksBySchedule = new Map<string, Record<string, unknown>[]>();
+  for (const task of scheduleTasks.results) {
+    const scheduleId = String(task.project_id);
+    tasksBySchedule.set(scheduleId, [...(tasksBySchedule.get(scheduleId) || []), task]);
+  }
   return projects.results
     .map((project) => {
       const code = String(project.code);
@@ -138,6 +144,14 @@ export async function readProjectOverview() {
       const actions = actionsByCode.get(code) as Record<string, unknown> | undefined;
       const contractStartDate = String(project.contract_start_date || '');
       const lastScheduleDate = lastDateByCode.get(code) || '';
+      const scheduleRows = schedule ? tasksBySchedule.get(String(schedule.id)) || [] : [];
+      const parentIds = new Set(scheduleRows.map((task) => String(task.parent_id || '')).filter(Boolean));
+      const pillarProgress = Object.fromEntries(['Empresa', 'Pessoas', 'Equipamentos'].map((pillar) => {
+        const leaves = scheduleRows.filter((task) => task.pillar === pillar && task.kind === 'task' && !parentIds.has(String(task.id)));
+        return [pillar, leaves.length
+          ? Math.round(leaves.reduce((sum, task) => sum + Number(task.progress || 0), 0) / leaves.length)
+          : null];
+      }));
       return {
         id: String(project.id), code, name: String(project.name), color: String(project.color || fallbackColor), status: normalizeProjectStatus(String(project.status || '')), createdAt: String(project.created_at || ''),
         scheduleId: schedule ? String(schedule.id) : null,
@@ -145,6 +159,7 @@ export async function readProjectOverview() {
         contractStartDate,
         lastScheduleDate,
         bufferDays: bufferDays(contractStartDate, lastScheduleDate),
+        pillarProgress,
         updatedAt: schedule ? String(schedule.updated_at || '') : String(project.updated_at || project.created_at || ''),
         actionCount: Number(actions?.total || 0),
         openActionCount: Number(actions?.open_total || 0),
